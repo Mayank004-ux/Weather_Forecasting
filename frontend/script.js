@@ -1,5 +1,102 @@
 const API_BASE = "http://127.0.0.1:8000";
 
+const authScreen = document.getElementById("authScreen");
+const dashboard = document.getElementById("dashboard");
+const loginTab = document.getElementById("loginTab");
+const registerTab = document.getElementById("registerTab");
+const loginForm = document.getElementById("loginForm");
+const registerForm = document.getElementById("registerForm");
+const authMessage = document.getElementById("authMessage");
+const userEmail = document.getElementById("userEmail");
+const logoutBtn = document.getElementById("logoutBtn");
+
+let accessToken = sessionStorage.getItem("weather_access_token");
+let map = null;
+let mapInitialized = false;
+const markers = {};
+
+function setAuthMessage(message = "", type = "") {
+    authMessage.textContent = message;
+    authMessage.className = `auth-message ${type}`;
+}
+
+function showAuthScreen(message = "") {
+    accessToken = null;
+    sessionStorage.removeItem("weather_access_token");
+    dashboard.hidden = true;
+    authScreen.hidden = false;
+    setAuthMessage(message, message ? "error" : "");
+}
+
+function showDashboard(user) {
+    authScreen.hidden = true;
+    dashboard.hidden = false;
+    userEmail.textContent = user.email;
+    initializeMap();
+    window.setTimeout(() => map.invalidateSize(), 0);
+    checkApi();
+    loadForecast("Delhi");
+}
+
+async function apiFetch(path, options = {}) {
+    const headers = new Headers(options.headers || {});
+    if (accessToken) {
+        headers.set("Authorization", `Bearer ${accessToken}`);
+    }
+    const response = await fetch(`${API_BASE}${path}`, { ...options, headers });
+    if (response.status === 401 && path !== "/auth/login") {
+        showAuthScreen("Your session has ended. Please log in again.");
+    }
+    return response;
+}
+
+function switchAuthForm(mode) {
+    const showLogin = mode === "login";
+    loginForm.hidden = !showLogin;
+    registerForm.hidden = showLogin;
+    loginTab.classList.toggle("active", showLogin);
+    registerTab.classList.toggle("active", !showLogin);
+    setAuthMessage();
+}
+
+async function submitAuth(event, endpoint, form) {
+    event.preventDefault();
+    const submitButton = form.querySelector("button[type='submit']");
+    const originalText = submitButton.textContent;
+    const email = form.querySelector("input[type='email']").value;
+    const password = form.querySelector("input[type='password']").value;
+    submitButton.disabled = true;
+    submitButton.textContent = "Please wait...";
+    setAuthMessage();
+
+    try {
+        const response = await fetch(`${API_BASE}${endpoint}`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ email, password })
+        });
+        const data = await response.json();
+        if (!response.ok) {
+            throw new Error(data.detail || "Authentication request failed.");
+        }
+        accessToken = data.access_token;
+        sessionStorage.setItem("weather_access_token", accessToken);
+        form.reset();
+        showDashboard(data.user);
+    } catch (error) {
+        setAuthMessage(error.message, "error");
+    } finally {
+        submitButton.disabled = false;
+        submitButton.textContent = originalText;
+    }
+}
+
+loginTab.addEventListener("click", () => switchAuthForm("login"));
+registerTab.addEventListener("click", () => switchAuthForm("register"));
+loginForm.addEventListener("submit", event => submitAuth(event, "/auth/login", loginForm));
+registerForm.addEventListener("submit", event => submitAuth(event, "/auth/register", registerForm));
+logoutBtn.addEventListener("click", () => showAuthScreen());
+
 
 /* ============================================================
    CITY COORDINATES
@@ -80,7 +177,13 @@ const mapLocation =
    MAP
 ============================================================ */
 
-const map = L.map("map", {
+function initializeMap() {
+
+    if (mapInitialized) {
+        return;
+    }
+
+    map = L.map("map", {
 
     worldCopyJump: true,
 
@@ -88,16 +191,16 @@ const map = L.map("map", {
 
     maxZoom: 12
 
-}).setView(
+    }).setView(
 
     [22.5, 78.9],
 
     4
 
-);
+    );
 
 
-L.tileLayer(
+    L.tileLayer(
 
     "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
 
@@ -110,13 +213,10 @@ L.tileLayer(
 
     }
 
-).addTo(map);
+    ).addTo(map);
 
 
-const markers = {};
-
-
-Object.entries(CITY_COORDS).forEach(
+    Object.entries(CITY_COORDS).forEach(
 
     ([city, coords]) => {
 
@@ -149,7 +249,10 @@ Object.entries(CITY_COORDS).forEach(
 
     }
 
-);
+    );
+
+    mapInitialized = true;
+}
 
 
 /* ============================================================
@@ -530,16 +633,16 @@ async function loadForecast(
 
         ] = await Promise.all([
 
-            fetch(
-                `${API_BASE}/predict/${encodeURIComponent(city)}`
+            apiFetch(
+                `/predict/${encodeURIComponent(city)}`
             ),
 
-            fetch(
-                `${API_BASE}/predict/tomorrow/${encodeURIComponent(city)}`
+            apiFetch(
+                `/predict/tomorrow/${encodeURIComponent(city)}`
             ),
 
-            fetch(
-                `${API_BASE}/predict/10days/${encodeURIComponent(city)}`
+            apiFetch(
+                `/predict/10days/${encodeURIComponent(city)}`
             )
 
         ]);
@@ -834,6 +937,21 @@ citySelect.addEventListener(
    INITIAL LOAD
 ============================================================ */
 
-checkApi();
+async function initializeApp() {
+    if (!accessToken) {
+        showAuthScreen();
+        return;
+    }
 
-loadForecast("Delhi");
+    try {
+        const response = await apiFetch("/auth/me");
+        if (!response.ok) {
+            return;
+        }
+        showDashboard(await response.json());
+    } catch (error) {
+        showAuthScreen("Unable to restore your session. Please log in again.");
+    }
+}
+
+initializeApp();

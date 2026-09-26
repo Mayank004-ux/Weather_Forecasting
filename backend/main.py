@@ -1,17 +1,22 @@
 from pathlib import Path
+import sqlite3
 
 import joblib
 import numpy as np
 import pandas as pd
 import requests
 
-from fastapi import FastAPI, HTTPException
+from fastapi import Depends, FastAPI, HTTPException, status
 from tensorflow.keras.models import load_model
 
 from backend.live_weather import CITIES, get_latest_hourly_weather
 from backend.feature_engineering import create_features, FEATURE_COLUMNS
 from backend.model_loader import xgb_model, scaler
 from fastapi.middleware.cors import CORSMiddleware
+from backend.auth import create_access_token, get_current_user, hash_password, verify_password
+from backend.config import get_cors_origins
+from backend.database import create_user, get_user_by_email, initialize_database
+from backend.schemas import LoginRequest, RegisterRequest, TokenResponse, UserResponse
 
 
 # ============================================================
@@ -81,11 +86,47 @@ app = FastAPI(
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
+    allow_origins=get_cors_origins(),
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+initialize_database()
+
+
+@app.post("/auth/register", response_model=TokenResponse, status_code=status.HTTP_201_CREATED)
+def register_user(payload: RegisterRequest):
+    """Create an account and return an access token for the new session."""
+    email = payload.email.strip().lower()
+
+    if get_user_by_email(email):
+        raise HTTPException(status_code=409, detail="An account with this email already exists.")
+
+    try:
+        user = create_user(email, hash_password(payload.password))
+    except sqlite3.IntegrityError as error:
+        # Covers a simultaneous request attempting to create the same email.
+        raise HTTPException(status_code=409, detail="An account with this email already exists.") from error
+
+    return {"access_token": create_access_token(user["email"]), "user": user}
+
+
+@app.post("/auth/login", response_model=TokenResponse)
+def login_user(payload: LoginRequest):
+    """Verify credentials and issue a signed, time-limited JWT."""
+    email = payload.email.strip().lower()
+    user = get_user_by_email(email)
+
+    if not user or not verify_password(payload.password, user["password_hash"]):
+        raise HTTPException(status_code=401, detail="Incorrect email or password.")
+
+    return {"access_token": create_access_token(user["email"]), "user": user}
+
+
+@app.get("/auth/me", response_model=UserResponse)
+def get_me(current_user: dict = Depends(get_current_user)):
+    return current_user
 
 def normalize_city(city: str) -> str:
     city = city.strip().lower()
@@ -220,7 +261,7 @@ def root():
 # ============================================================
 
 @app.get("/cities")
-def get_cities():
+def get_cities(current_user: dict = Depends(get_current_user)):
 
     return {
         "cities": list(CITIES.keys())
@@ -248,7 +289,7 @@ def health():
 # ============================================================
 
 @app.get("/predict/{city}")
-def predict_next_hour(city: str):
+def predict_next_hour(city: str, current_user: dict = Depends(get_current_user)):
 
     city = normalize_city(city)
 
@@ -391,7 +432,7 @@ def predict_next_hour(city: str):
 
 TIME_STEPS = 24
 @app.get("/predict/tomorrow/{city}")
-def predict_next_24_hours(city: str):
+def predict_next_24_hours(city: str, current_user: dict = Depends(get_current_user)):
 
     # --------------------------------------------------------
     # Validate city
@@ -771,7 +812,7 @@ def get_10_day_weather_data(city: str):
 # ============================================================
 
 @app.get("/predict/10days/{city}")
-def predict_next_10_days(city: str):
+def predict_next_10_days(city: str, current_user: dict = Depends(get_current_user)):
 
     city = normalize_city(city)
 

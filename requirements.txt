@@ -1,0 +1,12 @@
+fastapi
+uvicorn[standard]
+joblib
+numpy
+pandas
+requests
+scikit-learn
+tensorflow
+xgboost
+python-dotenv
+PyJWT
+pwdlib[argon2]

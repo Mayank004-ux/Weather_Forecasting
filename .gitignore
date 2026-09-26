@@ -13,6 +13,8 @@ env/
 # Environment variables
 .env
 .env.*
+!.env.example
+backend/weather_auth.db
 
 # IDE
 .vscode/

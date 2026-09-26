@@ -20,6 +20,40 @@
 
 <body>
 
+<main id="authScreen" class="auth-screen">
+    <section class="auth-card">
+        <p class="eyebrow">AI WEATHER PLATFORM</p>
+        <h1>Welcome back</h1>
+        <p class="auth-intro">Sign in to access your Weather Forecasting AI dashboard.</p>
+
+        <div class="auth-tabs" role="tablist">
+            <button class="auth-tab active" id="loginTab" type="button">Login</button>
+            <button class="auth-tab" id="registerTab" type="button">Register</button>
+        </div>
+
+        <form id="loginForm" class="auth-form">
+            <label for="loginEmail">Email address</label>
+            <input id="loginEmail" type="email" autocomplete="email" required>
+            <label for="loginPassword">Password</label>
+            <input id="loginPassword" type="password" autocomplete="current-password" required>
+            <button type="submit">Login</button>
+        </form>
+
+        <form id="registerForm" class="auth-form" hidden>
+            <label for="registerEmail">Email address</label>
+            <input id="registerEmail" type="email" autocomplete="email" required>
+            <label for="registerPassword">Password</label>
+            <input id="registerPassword" type="password" minlength="8" autocomplete="new-password" required>
+            <p class="password-help">Use at least 8 characters.</p>
+            <button type="submit">Create account</button>
+        </form>
+
+        <p id="authMessage" class="auth-message" aria-live="polite"></p>
+    </section>
+</main>
+
+<div id="dashboard" hidden>
+
 <header class="topbar">
 
     <div>
@@ -35,6 +69,11 @@
     <div class="status" id="apiStatus">
         <span class="status-dot"></span>
         Checking API...
+    </div>
+
+    <div class="user-actions">
+        <span id="userEmail" class="user-email"></span>
+        <button id="logoutBtn" class="logout-btn" type="button">Logout</button>
     </div>
 
 </header>
@@ -341,6 +380,8 @@
     Weather Forecasting AI • Built with FastAPI, XGBoost, GRU & Leaflet
 
 </footer>
+
+</div>
 
 
 <!-- Leaflet -->
