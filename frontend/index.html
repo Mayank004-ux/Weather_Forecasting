@@ -1,0 +1,358 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <title>Weather Forecasting AI</title>
+
+    <!-- Leaflet -->
+    <link
+        rel="stylesheet"
+        href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+    >
+
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+    <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+
+<header class="topbar">
+
+    <div>
+        <p class="eyebrow">AI WEATHER PLATFORM</p>
+
+        <h1>Weather Forecasting AI</h1>
+
+        <p class="subtitle">
+            XGBoost + GRU powered temperature forecasting
+        </p>
+    </div>
+
+    <div class="status" id="apiStatus">
+        <span class="status-dot"></span>
+        Checking API...
+    </div>
+
+</header>
+
+
+<main class="container">
+
+    <!-- SEARCH -->
+
+    <section class="search-panel">
+
+        <div class="search-box">
+
+            <label for="citySelect">
+                Select location
+            </label>
+
+            <div class="search-row">
+
+                <select id="citySelect">
+
+                    <option value="Delhi">
+                        Delhi
+                    </option>
+
+                    <option value="Mumbai">
+                        Mumbai
+                    </option>
+
+                    <option value="Bengaluru">
+                        Bengaluru
+                    </option>
+
+                    <option value="Chennai">
+                        Chennai
+                    </option>
+
+                    <option value="Bhopal">
+                        Bhopal
+                    </option>
+
+                </select>
+
+                <button id="searchBtn">
+                    Forecast
+                </button>
+
+            </div>
+
+        </div>
+
+
+        <div class="model-badge">
+            GRU • 10-Day AI Forecast
+        </div>
+
+    </section>
+
+
+    <!-- WORLD MAP -->
+
+    <section class="map-card">
+
+        <div class="section-heading">
+
+            <div>
+
+                <p class="eyebrow">
+                    LIVE LOCATION VIEW
+                </p>
+
+                <h2>
+                    World Weather Map
+                </h2>
+
+            </div>
+
+            <span id="mapLocation">
+                Select a city
+            </span>
+
+        </div>
+
+
+        <div id="map"></div>
+
+    </section>
+
+
+    <!-- CURRENT WEATHER / MODEL INFORMATION -->
+
+    <section class="current-grid">
+
+        <div class="current-card main-temp">
+
+            <span class="card-label">
+                Selected City
+            </span>
+
+            <h2 id="selectedCity">
+                --
+            </h2>
+
+            <div class="temperature">
+
+                <span id="currentTemp">
+                    --
+                </span>
+
+                <sup>
+                    °C
+                </sup>
+
+            </div>
+
+            <p>
+                Latest available temperature
+            </p>
+
+        </div>
+
+
+        <div class="metric-card">
+
+            <span class="metric-icon">
+                📈
+            </span>
+
+            <span class="card-label">
+                Next Hour
+            </span>
+
+            <strong id="nextHour">
+                -- °C
+            </strong>
+
+            <small id="nextHourTime">
+                AI prediction
+            </small>
+
+        </div>
+
+
+        <div class="metric-card">
+
+            <span class="metric-icon">
+                🧠
+            </span>
+
+            <span class="card-label">
+                AI Model
+            </span>
+
+            <strong>
+                GRU
+            </strong>
+
+            <small>
+                24-hour sequence
+            </small>
+
+        </div>
+
+
+        <div class="metric-card">
+
+            <span class="metric-icon">
+                📅
+            </span>
+
+            <span class="card-label">
+                Forecast
+            </span>
+
+            <strong id="forecastDays">
+                -- days
+            </strong>
+
+            <small>
+                240 hourly predictions
+            </small>
+
+        </div>
+
+    </section>
+
+
+    <!-- NEXT 24 HOURS GRAPH -->
+
+    <section class="chart-card">
+
+        <div class="section-heading">
+
+            <div>
+
+                <p class="eyebrow">
+                    SHORT-TERM AI FORECAST
+                </p>
+
+                <h2>
+                    Next 24 Hours
+                </h2>
+
+            </div>
+
+            <span id="hourlyStatus">
+                Loading...
+            </span>
+
+        </div>
+
+
+        <div class="chart-container">
+
+            <canvas id="hourlyChart"></canvas>
+
+        </div>
+
+    </section>
+
+
+    <!-- 10 DAY FORECAST -->
+
+    <section class="forecast-card">
+
+        <div class="section-heading">
+
+            <div>
+
+                <p class="eyebrow">
+                    AI PREDICTION
+                </p>
+
+                <h2>
+                    10-Day Temperature Forecast
+                </h2>
+
+            </div>
+
+            <span id="forecastStatus">
+                Loading...
+            </span>
+
+        </div>
+
+
+        <div id="forecastGrid" class="forecast-grid"></div>
+
+    </section>
+
+
+    <!-- INFORMATION -->
+
+    <section class="info-grid">
+
+        <div class="info-card">
+
+            <h3>
+                ⚡ XGBoost
+            </h3>
+
+            <p>
+                Predicts the next-hour temperature using
+                the latest engineered weather features.
+            </p>
+
+        </div>
+
+
+        <div class="info-card">
+
+            <h3>
+                🧠 GRU
+            </h3>
+
+            <p>
+                Uses the latest 24-hour sequence to generate
+                recursive temperature forecasts.
+            </p>
+
+        </div>
+
+
+        <div class="info-card">
+
+            <h3>
+                🌐 Live Weather
+            </h3>
+
+            <p>
+                Current weather context is retrieved from
+                your Open-Meteo integration.
+            </p>
+
+        </div>
+
+    </section>
+
+</main>
+
+
+<footer>
+
+    Weather Forecasting AI • Built with FastAPI, XGBoost, GRU & Leaflet
+
+</footer>
+
+
+<!-- Leaflet -->
+
+<script
+    src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js">
+</script>
+
+
+<!-- Frontend JavaScript -->
+
+<script src="script.js"></script>
+
+</body>
+</html>

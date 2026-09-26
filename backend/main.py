@@ -11,6 +11,7 @@ from tensorflow.keras.models import load_model
 from backend.live_weather import CITIES, get_latest_hourly_weather
 from backend.feature_engineering import create_features, FEATURE_COLUMNS
 from backend.model_loader import xgb_model, scaler
+from fastapi.middleware.cors import CORSMiddleware
 
 
 # ============================================================
@@ -76,6 +77,14 @@ app = FastAPI(
     title="Weather Forecasting AI",
     description="AI-powered weather forecasting using XGBoost and GRU.",
     version="1.0.0"
+)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 def normalize_city(city: str) -> str:
@@ -240,7 +249,9 @@ def health():
 
 @app.get("/predict/{city}")
 def predict_next_hour(city: str):
+
     city = normalize_city(city)
+
     # --------------------------------------------------------
     # Get historical + latest weather data
     # --------------------------------------------------------
@@ -265,12 +276,44 @@ def predict_next_hour(city: str):
         )
 
     # --------------------------------------------------------
-    # Latest available observation
+    # IMPORTANT:
+    # Select the latest time that is NOT in the future.
+    #
+    # The live Open-Meteo data may contain future hourly
+    # forecast records. Therefore, we must NOT simply use:
+    #
+    # featured_df.iloc[-1]
     # --------------------------------------------------------
 
-    latest_row = featured_df.iloc[-1]
+    current_time = pd.Timestamp.now(
+        tz="Asia/Kolkata"
+    ).tz_localize(None)
 
-    latest_time = latest_row["time"]
+    # Make sure time column is datetime
+    featured_df["time"] = pd.to_datetime(
+        featured_df["time"]
+    )
+
+    # Remove future records
+    available_df = featured_df[
+        featured_df["time"] <= current_time
+    ].copy()
+
+    if available_df.empty:
+        raise HTTPException(
+            status_code=500,
+            detail="No weather data available up to the current time."
+        )
+
+    # --------------------------------------------------------
+    # Latest actual/current available observation
+    # --------------------------------------------------------
+
+    latest_row = available_df.iloc[-1]
+
+    latest_time = pd.Timestamp(
+        latest_row["time"]
+    )
 
     latest_features = latest_row[
         FEATURE_COLUMNS
@@ -303,36 +346,50 @@ def predict_next_hour(city: str):
     # --------------------------------------------------------
 
     prediction_time = (
-        pd.Timestamp(latest_time)
+        latest_time
         + pd.Timedelta(hours=1)
     )
 
+    # --------------------------------------------------------
+    # Return result
+    # --------------------------------------------------------
+
     return {
         "city": city,
+
         "latest_data_time": str(
-            pd.Timestamp(latest_time)
+            latest_time
         ),
+
         "latest_temperature": round(
-            float(latest_row["temperature_2m"]),
+            float(
+                latest_row["temperature_2m"]
+            ),
             2
         ),
+
         "prediction_time": str(
             prediction_time
         ),
+
         "predicted_temperature": round(
             predicted_temperature,
             2
         ),
+
         "model": "XGBoost",
-        "features": len(FEATURE_COLUMNS)
+
+        "features": len(
+            FEATURE_COLUMNS
+        )
     }
-    # ============================================================
+
+
+# ============================================================
 # 24-HOUR GRU FORECAST
 # ============================================================
 
 TIME_STEPS = 24
-
-
 @app.get("/predict/tomorrow/{city}")
 def predict_next_24_hours(city: str):
 

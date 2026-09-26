@@ -1,0 +1,720 @@
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
+
+:root {
+
+    --bg: #07111f;
+
+    --panel: #0d1b2a;
+
+    --panel-2: #102235;
+
+    --border: rgba(255,255,255,0.09);
+
+    --text: #eef6ff;
+
+    --muted: #9fb1c5;
+
+    --accent: #62b6ff;
+
+    --accent-2: #7c5cff;
+
+    --success: #35d07f;
+}
+
+
+body {
+
+    min-height: 100vh;
+
+    font-family: Inter, Arial, sans-serif;
+
+    color: var(--text);
+
+    background:
+
+        radial-gradient(
+            circle at 15% 10%,
+            rgba(98,182,255,.13),
+            transparent 28%
+        ),
+
+        radial-gradient(
+            circle at 85% 20%,
+            rgba(124,92,255,.12),
+            transparent 25%
+        ),
+
+        var(--bg);
+}
+
+
+/* =========================
+   HEADER
+========================= */
+
+.topbar {
+
+    max-width: 1250px;
+
+    margin: auto;
+
+    padding: 38px 24px 25px;
+
+    display: flex;
+
+    align-items: flex-end;
+
+    justify-content: space-between;
+
+    gap: 20px;
+}
+
+
+.eyebrow {
+
+    color: var(--accent);
+
+    font-size: 11px;
+
+    font-weight: 800;
+
+    letter-spacing: 2px;
+
+    margin-bottom: 8px;
+}
+
+
+h1 {
+
+    font-size: clamp(30px, 5vw, 52px);
+
+    line-height: 1;
+}
+
+
+.subtitle {
+
+    margin-top: 10px;
+
+    color: var(--muted);
+}
+
+
+.status {
+
+    padding: 10px 14px;
+
+    border: 1px solid var(--border);
+
+    border-radius: 999px;
+
+    background: rgba(255,255,255,.04);
+
+    color: var(--muted);
+
+    font-size: 13px;
+
+    white-space: nowrap;
+}
+
+
+.status-dot {
+
+    display: inline-block;
+
+    width: 8px;
+
+    height: 8px;
+
+    border-radius: 50%;
+
+    background: #f0ad4e;
+
+    margin-right: 7px;
+}
+
+
+/* =========================
+   MAIN CONTAINER
+========================= */
+
+.container {
+
+    max-width: 1250px;
+
+    margin: auto;
+
+    padding: 0 24px 40px;
+}
+
+
+.search-panel,
+.map-card,
+.current-card,
+.metric-card,
+.chart-card,
+.forecast-card,
+.info-card {
+
+    background: rgba(13,27,42,.86);
+
+    border: 1px solid var(--border);
+
+    box-shadow: 0 18px 45px rgba(0,0,0,.18);
+
+    backdrop-filter: blur(12px);
+}
+
+
+/* =========================
+   SEARCH
+========================= */
+
+.search-panel {
+
+    border-radius: 20px;
+
+    padding: 20px;
+
+    display: flex;
+
+    align-items: end;
+
+    justify-content: space-between;
+
+    gap: 20px;
+
+    margin-bottom: 20px;
+}
+
+
+.search-box {
+
+    width: min(560px, 100%);
+}
+
+
+label {
+
+    display: block;
+
+    color: var(--muted);
+
+    font-size: 13px;
+
+    margin-bottom: 8px;
+}
+
+
+.search-row {
+
+    display: flex;
+
+    gap: 10px;
+}
+
+
+select,
+button {
+
+    height: 48px;
+
+    border-radius: 12px;
+
+    border: 1px solid var(--border);
+
+    font-size: 15px;
+}
+
+
+select {
+
+    flex: 1;
+
+    padding: 0 14px;
+
+    color: var(--text);
+
+    background: var(--panel-2);
+}
+
+
+button {
+
+    padding: 0 24px;
+
+    color: white;
+
+    background:
+        linear-gradient(
+            135deg,
+            var(--accent-2),
+            var(--accent)
+        );
+
+    border: 0;
+
+    font-weight: 800;
+
+    cursor: pointer;
+}
+
+
+button:hover {
+
+    transform: translateY(-1px);
+}
+
+
+button:disabled {
+
+    opacity: .6;
+
+    cursor: wait;
+}
+
+
+.model-badge {
+
+    color: var(--muted);
+
+    border: 1px solid var(--border);
+
+    padding: 10px 14px;
+
+    border-radius: 999px;
+
+    font-size: 12px;
+}
+
+
+/* =========================
+   SECTION HEADINGS
+========================= */
+
+.section-heading {
+
+    display: flex;
+
+    justify-content: space-between;
+
+    align-items: center;
+
+    gap: 20px;
+
+    margin-bottom: 16px;
+}
+
+
+.section-heading h2 {
+
+    font-size: 22px;
+}
+
+
+.section-heading > span {
+
+    color: var(--muted);
+
+    font-size: 13px;
+}
+
+
+/* =========================
+   MAP
+========================= */
+
+.map-card {
+
+    border-radius: 22px;
+
+    padding: 20px;
+
+    margin-bottom: 20px;
+}
+
+
+#map {
+
+    height: 470px;
+
+    width: 100%;
+
+    border-radius: 16px;
+
+    overflow: hidden;
+}
+
+
+.leaflet-container {
+
+    background: #091421;
+}
+
+
+/* =========================
+   CURRENT WEATHER
+========================= */
+
+.current-grid {
+
+    display: grid;
+
+    grid-template-columns:
+        1.5fr
+        repeat(3, 1fr);
+
+    gap: 15px;
+
+    margin-bottom: 20px;
+}
+
+
+.current-card,
+.metric-card {
+
+    min-height: 180px;
+
+    border-radius: 18px;
+
+    padding: 22px;
+}
+
+
+.main-temp {
+
+    background:
+
+        radial-gradient(
+            circle at 80% 25%,
+            rgba(98,182,255,.22),
+            transparent 35%
+        ),
+
+        rgba(13,27,42,.9);
+}
+
+
+.card-label {
+
+    color: var(--muted);
+
+    font-size: 12px;
+
+    text-transform: uppercase;
+
+    letter-spacing: 1px;
+}
+
+
+.main-temp h2 {
+
+    margin-top: 8px;
+
+    font-size: 25px;
+}
+
+
+.temperature {
+
+    margin-top: 15px;
+
+    font-size: 55px;
+
+    font-weight: 800;
+}
+
+
+.temperature sup {
+
+    font-size: 24px;
+
+    color: var(--accent);
+}
+
+
+.current-card p,
+.metric-card small {
+
+    color: var(--muted);
+
+    font-size: 12px;
+}
+
+
+.metric-icon {
+
+    display: block;
+
+    font-size: 26px;
+
+    margin-bottom: 20px;
+}
+
+
+.metric-card strong {
+
+    display: block;
+
+    margin-top: 10px;
+
+    font-size: 27px;
+}
+
+
+/* =========================
+   24 HOUR CHART
+========================= */
+
+.chart-card {
+
+    border-radius: 22px;
+
+    padding: 20px;
+
+    margin-bottom: 20px;
+}
+
+
+.chart-container {
+
+    position: relative;
+
+    height: 380px;
+
+    width: 100%;
+}
+
+
+#hourlyChart {
+
+    width: 100% !important;
+
+    height: 100% !important;
+}
+
+
+/* =========================
+   10 DAY FORECAST
+========================= */
+
+.forecast-card {
+
+    border-radius: 22px;
+
+    padding: 20px;
+
+    margin-bottom: 20px;
+}
+
+
+.forecast-grid {
+
+    display: grid;
+
+    grid-template-columns:
+        repeat(5, 1fr);
+
+    gap: 12px;
+}
+
+
+.forecast-item {
+
+    padding: 18px;
+
+    border: 1px solid var(--border);
+
+    border-radius: 16px;
+
+    background: rgba(255,255,255,.025);
+}
+
+
+.forecast-item .day {
+
+    font-weight: 800;
+
+    margin-bottom: 6px;
+}
+
+
+.forecast-item .date {
+
+    color: var(--muted);
+
+    font-size: 12px;
+
+    margin-bottom: 18px;
+}
+
+
+.forecast-temp {
+
+    font-size: 22px;
+
+    font-weight: 800;
+}
+
+
+.forecast-temp span {
+
+    color: var(--muted);
+
+    font-size: 14px;
+
+    font-weight: 500;
+}
+
+
+.avg {
+
+    color: var(--accent);
+
+    margin-top: 8px;
+
+    font-size: 13px;
+}
+
+
+/* =========================
+   INFO
+========================= */
+
+.info-grid {
+
+    display: grid;
+
+    grid-template-columns:
+        repeat(3, 1fr);
+
+    gap: 15px;
+}
+
+
+.info-card {
+
+    border-radius: 18px;
+
+    padding: 20px;
+}
+
+
+.info-card h3 {
+
+    margin-bottom: 10px;
+}
+
+
+.info-card p {
+
+    color: var(--muted);
+
+    line-height: 1.6;
+
+    font-size: 14px;
+}
+
+
+/* =========================
+   FOOTER
+========================= */
+
+footer {
+
+    text-align: center;
+
+    color: var(--muted);
+
+    font-size: 12px;
+
+    padding: 20px;
+
+    border-top: 1px solid var(--border);
+}
+
+
+/* =========================
+   RESPONSIVE
+========================= */
+
+@media (max-width: 900px) {
+
+    .current-grid {
+
+        grid-template-columns:
+            repeat(2, 1fr);
+    }
+
+
+    .forecast-grid {
+
+        grid-template-columns:
+            repeat(2, 1fr);
+    }
+
+
+    .info-grid {
+
+        grid-template-columns:
+            1fr;
+    }
+
+
+    .search-panel,
+    .topbar {
+
+        align-items: flex-start;
+
+        flex-direction: column;
+    }
+}
+
+
+@media (max-width: 600px) {
+
+    .container,
+    .topbar {
+
+        padding-left: 14px;
+
+        padding-right: 14px;
+    }
+
+
+    .search-row {
+
+        flex-direction: column;
+    }
+
+
+    .current-grid,
+    .forecast-grid {
+
+        grid-template-columns:
+            1fr;
+    }
+
+
+    #map {
+
+        height: 360px;
+    }
+
+
+    .chart-container {
+
+        height: 300px;
+    }
+
+
+    .temperature {
+
+        font-size: 45px;
+    }
+}
