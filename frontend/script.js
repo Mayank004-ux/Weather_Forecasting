@@ -1,132 +1,243 @@
 const API_BASE = "http://127.0.0.1:8000";
 
-const authScreen = document.getElementById("authScreen");
-const dashboard = document.getElementById("dashboard");
-const loginTab = document.getElementById("loginTab");
-const registerTab = document.getElementById("registerTab");
-const loginForm = document.getElementById("loginForm");
-const registerForm = document.getElementById("registerForm");
-const authMessage = document.getElementById("authMessage");
-const userEmail = document.getElementById("userEmail");
-const logoutBtn = document.getElementById("logoutBtn");
 
-let accessToken = sessionStorage.getItem("weather_access_token");
-let map = null;
-let mapInitialized = false;
-const markers = {};
+/* ============================================================
+   AUTHENTICATION ELEMENTS
+============================================================ */
 
-function setAuthMessage(message = "", type = "") {
-    authMessage.textContent = message;
-    authMessage.className = `auth-message ${type}`;
-}
+const authScreen =
+    document.getElementById("authScreen");
 
-function showAuthScreen(message = "") {
-    accessToken = null;
-    sessionStorage.removeItem("weather_access_token");
-    dashboard.hidden = true;
-    authScreen.hidden = false;
-    setAuthMessage(message, message ? "error" : "");
-}
+const dashboard =
+    document.getElementById("dashboard");
 
-function showDashboard(user) {
-    authScreen.hidden = true;
-    dashboard.hidden = false;
-    userEmail.textContent = user.email;
-    initializeMap();
-    window.setTimeout(() => map.invalidateSize(), 0);
-    checkApi();
-    loadForecast("Delhi");
-}
+const loginTab =
+    document.getElementById("loginTab");
 
-async function apiFetch(path, options = {}) {
-    const headers = new Headers(options.headers || {});
-    if (accessToken) {
-        headers.set("Authorization", `Bearer ${accessToken}`);
-    }
-    const response = await fetch(`${API_BASE}${path}`, { ...options, headers });
-    if (response.status === 401 && path !== "/auth/login") {
-        showAuthScreen("Your session has ended. Please log in again.");
-    }
-    return response;
-}
+const registerTab =
+    document.getElementById("registerTab");
 
-function switchAuthForm(mode) {
-    const showLogin = mode === "login";
-    loginForm.hidden = !showLogin;
-    registerForm.hidden = showLogin;
-    loginTab.classList.toggle("active", showLogin);
-    registerTab.classList.toggle("active", !showLogin);
-    setAuthMessage();
-}
+const loginForm =
+    document.getElementById("loginForm");
 
-async function submitAuth(event, endpoint, form) {
-    event.preventDefault();
-    const submitButton = form.querySelector("button[type='submit']");
-    const originalText = submitButton.textContent;
-    const email = form.querySelector("input[type='email']").value;
-    const password = form.querySelector("input[type='password']").value;
-    submitButton.disabled = true;
-    submitButton.textContent = "Please wait...";
-    setAuthMessage();
+const registerForm =
+    document.getElementById("registerForm");
 
-    try {
-        const response = await fetch(`${API_BASE}${endpoint}`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ email, password })
-        });
-        const data = await response.json();
-        if (!response.ok) {
-            throw new Error(data.detail || "Authentication request failed.");
-        }
-        accessToken = data.access_token;
-        sessionStorage.setItem("weather_access_token", accessToken);
-        form.reset();
-        showDashboard(data.user);
-    } catch (error) {
-        setAuthMessage(error.message, "error");
-    } finally {
-        submitButton.disabled = false;
-        submitButton.textContent = originalText;
-    }
-}
+const authMessage =
+    document.getElementById("authMessage");
 
-loginTab.addEventListener("click", () => switchAuthForm("login"));
-registerTab.addEventListener("click", () => switchAuthForm("register"));
-loginForm.addEventListener("submit", event => submitAuth(event, "/auth/login", loginForm));
-registerForm.addEventListener("submit", event => submitAuth(event, "/auth/register", registerForm));
-logoutBtn.addEventListener("click", () => showAuthScreen());
+const userEmail =
+    document.getElementById("userEmail");
+
+const logoutBtn =
+    document.getElementById("logoutBtn");
+
+
+/* ============================================================
+   AUTH STATE
+============================================================ */
+
+let accessToken =
+    localStorage.getItem("weather_access_token");
+
+let currentUser =
+    null;
+
+
+/* ============================================================
+   MAP STATE
+============================================================ */
+
+let map =
+    null;
+
+let mapInitialized =
+    false;
+
+const markers =
+    {};
 
 
 /* ============================================================
    CITY COORDINATES
+   28 STATES + 8 UNION TERRITORIES
 ============================================================ */
 
 const CITY_COORDS = {
 
-    Delhi: [
-        28.6139,
-        77.2090
+    "Amaravati": [
+        16.5745,
+        80.3598
     ],
 
-    Mumbai: [
-        19.0760,
-        72.8777
+    "Itanagar": [
+        27.0844,
+        93.6053
     ],
 
-    Bengaluru: [
+    "Dispur": [
+        26.1433,
+        91.7898
+    ],
+
+    "Patna": [
+        25.5941,
+        85.1376
+    ],
+
+    "Raipur": [
+        21.2514,
+        81.6296
+    ],
+
+    "Panaji": [
+        15.4909,
+        73.8278
+    ],
+
+    "Gandhinagar": [
+        23.2156,
+        72.6369
+    ],
+
+    "Chandigarh": [
+        30.7333,
+        76.7794
+    ],
+
+    "Shimla": [
+        31.1048,
+        77.1734
+    ],
+
+    "Ranchi": [
+        23.3441,
+        85.3096
+    ],
+
+    "Bengaluru": [
         12.9716,
         77.5946
     ],
 
-    Chennai: [
+    "Thiruvananthapuram": [
+        8.5241,
+        76.9366
+    ],
+
+    "Bhopal": [
+        23.2599,
+        77.4126
+    ],
+
+    "Mumbai": [
+        19.0760,
+        72.8777
+    ],
+
+    "Imphal": [
+        24.8170,
+        93.9368
+    ],
+
+    "Shillong": [
+        25.5788,
+        91.8933
+    ],
+
+    "Aizawl": [
+        23.7271,
+        92.7176
+    ],
+
+    "Kohima": [
+        25.6751,
+        94.1086
+    ],
+
+    "Bhubaneswar": [
+        20.2961,
+        85.8245
+    ],
+
+    "Jaipur": [
+        26.9124,
+        75.7873
+    ],
+
+    "Gangtok": [
+        27.3389,
+        88.6065
+    ],
+
+    "Chennai": [
         13.0827,
         80.2707
     ],
 
-    Bhopal: [
-        23.2599,
-        77.4126
+    "Hyderabad": [
+        17.3850,
+        78.4867
+    ],
+
+    "Agartala": [
+        23.8315,
+        91.2868
+    ],
+
+    "Lucknow": [
+        26.8467,
+        80.9462
+    ],
+
+    "Dehradun": [
+        30.3165,
+        78.0322
+    ],
+
+    "Kolkata": [
+        22.5726,
+        88.3639
+    ],
+
+    "Port Blair": [
+        11.6234,
+        92.7265
+    ],
+
+    "Daman": [
+        20.3974,
+        72.8328
+    ],
+
+    "New Delhi": [
+        28.6139,
+        77.2090
+    ],
+
+    "Srinagar": [
+        34.0837,
+        74.7973
+    ],
+
+    "Jammu": [
+        32.7266,
+        74.8570
+    ],
+
+    "Leh": [
+        34.1526,
+        77.5771
+    ],
+
+    "Kavaratti": [
+        10.5669,
+        72.6420
+    ],
+
+    "Puducherry": [
+        11.9416,
+        79.8083
     ]
 
 };
@@ -174,84 +285,726 @@ const mapLocation =
 
 
 /* ============================================================
+   AUTH MESSAGE
+============================================================ */
+
+function setAuthMessage(
+    message = "",
+    type = ""
+) {
+
+    authMessage.textContent =
+        message;
+
+    authMessage.className =
+        `auth-message ${type}`;
+}
+
+
+/* ============================================================
+   SHOW LOGIN SCREEN
+============================================================ */
+
+function showAuthScreen(
+    message = ""
+) {
+
+    accessToken =
+        null;
+
+    currentUser =
+        null;
+
+    localStorage.removeItem(
+        "weather_access_token"
+    );
+
+    dashboard.hidden =
+        true;
+
+    authScreen.hidden =
+        false;
+
+    setAuthMessage(
+        message,
+        message ? "error" : ""
+    );
+}
+
+
+/* ============================================================
+   SHOW DASHBOARD
+============================================================ */
+
+async function showDashboard(
+    user
+) {
+
+    currentUser =
+        user;
+
+    authScreen.hidden =
+        true;
+
+    dashboard.hidden =
+        false;
+
+    userEmail.textContent =
+        user.email;
+
+    initializeMap();
+
+    window.setTimeout(
+        () => {
+
+            if (map) {
+                map.invalidateSize();
+            }
+
+        },
+        100
+    );
+
+    await checkApi();
+
+    await loadCities();
+
+    await loadForecast(
+        "Delhi"
+    );
+}
+
+
+/* ============================================================
+   GENERIC API FETCH
+============================================================ */
+
+async function apiFetch(
+    path,
+    options = {}
+) {
+
+    const headers =
+        new Headers(
+            options.headers || {}
+        );
+
+
+    if (accessToken) {
+
+        headers.set(
+            "Authorization",
+            `Bearer ${accessToken}`
+        );
+
+    }
+
+
+    const response =
+        await fetch(
+            `${API_BASE}${path}`,
+            {
+                ...options,
+                headers
+            }
+        );
+
+
+    /*
+     * Token expired / invalid.
+     */
+
+    if (
+        response.status === 401 &&
+        !path.startsWith("/auth/login") &&
+        !path.startsWith("/auth/register")
+    ) {
+
+        showAuthScreen(
+            "Your session has ended. Please log in again."
+        );
+
+    }
+
+
+    return response;
+}
+
+
+/* ============================================================
+   SWITCH LOGIN / REGISTER
+============================================================ */
+
+function switchAuthForm(
+    mode
+) {
+
+    const showLogin =
+        mode === "login";
+
+
+    loginForm.hidden =
+        !showLogin;
+
+    registerForm.hidden =
+        showLogin;
+
+
+    loginTab.classList.toggle(
+        "active",
+        showLogin
+    );
+
+    registerTab.classList.toggle(
+        "active",
+        !showLogin
+    );
+
+
+    setAuthMessage();
+}
+
+
+/* ============================================================
+   LOGIN / REGISTER
+============================================================ */
+
+async function submitAuth(
+    event,
+    endpoint,
+    form
+) {
+
+    event.preventDefault();
+
+
+    const submitButton =
+        form.querySelector(
+            "button[type='submit']"
+        );
+
+
+    const originalText =
+        submitButton.textContent;
+
+
+    const email =
+        form.querySelector(
+            "input[type='email']"
+        ).value.trim();
+
+
+    const password =
+        form.querySelector(
+            "input[type='password']"
+        ).value;
+
+
+    submitButton.disabled =
+        true;
+
+    submitButton.textContent =
+        "Please wait...";
+
+
+    setAuthMessage();
+
+
+    try {
+
+        const response =
+            await fetch(
+                `${API_BASE}${endpoint}`,
+                {
+                    method: "POST",
+
+                    headers: {
+                        "Content-Type":
+                            "application/json"
+                    },
+
+                    body: JSON.stringify({
+                        email: email,
+                        password: password
+                    })
+                }
+            );
+
+
+        let data = {};
+
+        try {
+
+            data =
+                await response.json();
+
+        } catch {
+
+            data = {};
+
+        }
+
+
+        if (!response.ok) {
+
+            throw new Error(
+                data.detail ||
+                "Authentication request failed."
+            );
+
+        }
+
+
+        /*
+         * Save JWT permanently in browser storage.
+         */
+
+        accessToken =
+            data.access_token;
+
+
+        localStorage.setItem(
+            "weather_access_token",
+            accessToken
+        );
+
+
+        form.reset();
+
+
+        await showDashboard(
+            data.user
+        );
+
+    }
+
+
+    catch (error) {
+
+        console.error(
+            "Authentication error:",
+            error
+        );
+
+
+        setAuthMessage(
+            error.message ||
+            "Authentication failed.",
+            "error"
+        );
+
+    }
+
+
+    finally {
+
+        submitButton.disabled =
+            false;
+
+        submitButton.textContent =
+            originalText;
+
+    }
+
+}
+
+
+/* ============================================================
+   AUTH EVENTS
+============================================================ */
+
+loginTab.addEventListener(
+    "click",
+    () => switchAuthForm("login")
+);
+
+
+registerTab.addEventListener(
+    "click",
+    () => switchAuthForm("register")
+);
+
+
+loginForm.addEventListener(
+    "submit",
+    event =>
+        submitAuth(
+            event,
+            "/auth/login",
+            loginForm
+        )
+);
+
+
+registerForm.addEventListener(
+    "submit",
+    event =>
+        submitAuth(
+            event,
+            "/auth/register",
+            registerForm
+        )
+);
+
+
+logoutBtn.addEventListener(
+    "click",
+    () => {
+
+        showAuthScreen();
+
+        switchAuthForm(
+            "login"
+        );
+
+    }
+);
+
+
+/* ============================================================
+   LOAD CITIES FROM FASTAPI
+============================================================ */
+
+async function loadCities() {
+
+    try {
+
+        const response =
+            await apiFetch(
+                "/cities"
+            );
+
+
+        if (!response.ok) {
+
+            throw new Error(
+                `Unable to load cities: ${response.status}`
+            );
+
+        }
+
+
+        const data =
+            await response.json();
+
+
+        /*
+         * Support either:
+         *
+         * ["Delhi", "Mumbai", ...]
+         *
+         * OR:
+         *
+         * {"cities": ["Delhi", "Mumbai", ...]}
+         */
+
+        let cities;
+
+
+        if (Array.isArray(data)) {
+
+            cities =
+                data;
+
+        }
+
+        else if (
+            data &&
+            Array.isArray(data.cities)
+        ) {
+
+            cities =
+                data.cities;
+
+        }
+
+        else {
+
+            throw new Error(
+                "Invalid /cities response format."
+            );
+
+        }
+
+
+        /*
+         * Remove duplicates and sort alphabetically.
+         */
+
+        cities =
+            [...new Set(cities)]
+                .sort(
+                    (a, b) =>
+                        a.localeCompare(b)
+                );
+
+
+        citySelect.innerHTML =
+            "";
+
+
+        cities.forEach(
+            city => {
+
+                const option =
+                    document.createElement(
+                        "option"
+                    );
+
+                option.value =
+                    city;
+
+                option.textContent =
+                    city;
+
+                citySelect.appendChild(
+                    option
+                );
+
+            }
+        );
+
+
+        /*
+         * Prefer Delhi as initial city.
+         */
+
+        if (
+            cities.includes("Delhi")
+        ) {
+
+            citySelect.value =
+                "Delhi";
+
+        }
+
+        else if (cities.length > 0) {
+
+            citySelect.value =
+                cities[0];
+
+        }
+
+
+        /*
+         * Rebuild map markers using
+         * only cities supported by backend.
+         */
+
+        addCityMarkers(
+            cities
+        );
+
+
+        console.log(
+            `Loaded ${cities.length} cities from FastAPI.`
+        );
+
+    }
+
+
+    catch (error) {
+
+        console.error(
+            "City loading error:",
+            error
+        );
+
+
+        /*
+         * Fallback to known coordinates
+         * if /cities temporarily fails.
+         */
+
+        const fallbackCities =
+            Object.keys(
+                CITY_COORDS
+            );
+
+
+        citySelect.innerHTML =
+            "";
+
+
+        fallbackCities
+            .sort(
+                (a, b) =>
+                    a.localeCompare(b)
+            )
+            .forEach(
+                city => {
+
+                    const option =
+                        document.createElement(
+                            "option"
+                        );
+
+                    option.value =
+                        city;
+
+                    option.textContent =
+                        city;
+
+                    citySelect.appendChild(
+                        option
+                    );
+
+                }
+            );
+
+
+        citySelect.value =
+            "Delhi";
+
+
+        addCityMarkers(
+            fallbackCities
+        );
+
+    }
+
+}
+
+
+/* ============================================================
    MAP
 ============================================================ */
 
 function initializeMap() {
 
     if (mapInitialized) {
+
         return;
+
     }
 
-    map = L.map("map", {
 
-    worldCopyJump: true,
+    map =
+        L.map(
+            "map",
+            {
 
-    minZoom: 2,
+                worldCopyJump: true,
 
-    maxZoom: 12
+                minZoom: 2,
 
-    }).setView(
+                maxZoom: 12
 
-    [22.5, 78.9],
+            }
+        ).setView(
 
-    4
+            [22.5, 78.9],
 
-    );
+            4
+
+        );
 
 
     L.tileLayer(
 
-    "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
+        "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
 
-    {
+        {
 
-        maxZoom: 19,
+            maxZoom: 19,
 
-        attribution:
-            "&copy; OpenStreetMap contributors"
+            attribution:
+                "&copy; OpenStreetMap contributors"
 
-    }
+        }
 
-    ).addTo(map);
-
-
-    Object.entries(CITY_COORDS).forEach(
-
-    ([city, coords]) => {
-
-        const marker = L.marker(
-            coords
-        )
-        .addTo(map)
-        .bindPopup(
-
-            `<strong>${city}</strong>
-             <br>
-             Click Forecast to view AI predictions.`
-
-        );
-
-
-        marker.on(
-            "click",
-            () => {
-
-                citySelect.value = city;
-
-                loadForecast(city);
-
-            }
-        );
-
-
-        markers[city] = marker;
-
-    }
-
+    ).addTo(
+        map
     );
 
-    mapInitialized = true;
+
+    mapInitialized =
+        true;
+
+}
+
+
+/* ============================================================
+   ADD CITY MARKERS
+============================================================ */
+
+function addCityMarkers(
+    cities
+) {
+
+    if (!map) {
+
+        return;
+
+    }
+
+
+    cities.forEach(
+        city => {
+
+            const coords =
+                CITY_COORDS[city];
+
+
+            if (!coords) {
+
+                console.warn(
+                    `No coordinates found for ${city}`
+                );
+
+                return;
+
+            }
+
+
+            /*
+             * Don't create duplicate marker.
+             */
+
+            if (markers[city]) {
+
+                return;
+
+            }
+
+
+            const marker =
+                L.marker(
+                    coords
+                )
+                .addTo(map)
+                .bindPopup(
+
+                    `
+                    <strong>${city}</strong>
+                    <br>
+                    Click Forecast to view AI predictions.
+                    `
+
+                );
+
+
+            marker.on(
+                "click",
+                () => {
+
+                    citySelect.value =
+                        city;
+
+                    loadForecast(
+                        city
+                    );
+
+                }
+            );
+
+
+            markers[city] =
+                marker;
+
+        }
+    );
+
 }
 
 
@@ -259,162 +1012,193 @@ function initializeMap() {
    24-HOUR CHART
 ============================================================ */
 
-let hourlyChart = null;
+let hourlyChart =
+    null;
 
 
-function createHourlyChart(predictions) {
+function createHourlyChart(
+    predictions
+) {
 
     const canvas =
-        document.getElementById("hourlyChart");
+        document.getElementById(
+            "hourlyChart"
+        );
 
 
-    const labels = predictions.map(
-        item => {
+    if (
+        !predictions ||
+        predictions.length === 0
+    ) {
 
-            const date =
-                new Date(item.time);
+        hourlyStatus.textContent =
+            "No hourly predictions available.";
 
-            return date.toLocaleTimeString(
-                "en-IN",
-                {
-                    hour: "2-digit",
-                    minute: "2-digit"
-                }
-            );
+        return;
 
-        }
-    );
+    }
+
+
+    const labels =
+        predictions.map(
+            item => {
+
+                const date =
+                    new Date(
+                        item.time
+                    );
+
+
+                return date.toLocaleTimeString(
+                    "en-IN",
+                    {
+                        hour: "2-digit",
+                        minute: "2-digit"
+                    }
+                );
+
+            }
+        );
 
 
     const temperatures =
         predictions.map(
             item =>
-                item.predicted_temperature
+                Number(
+                    item.predicted_temperature
+                )
         );
 
 
-    if (hourlyChart !== null) {
+    if (
+        hourlyChart !== null
+    ) {
 
         hourlyChart.destroy();
 
     }
 
 
-    hourlyChart = new Chart(
+    hourlyChart =
+        new Chart(
 
-        canvas,
+            canvas,
 
-        {
+            {
 
-            type: "line",
+                type: "line",
 
-            data: {
+                data: {
 
-                labels: labels,
+                    labels: labels,
 
-                datasets: [
+                    datasets: [
 
-                    {
+                        {
 
-                        label:
-                            "Predicted Temperature (°C)",
+                            label:
+                                "Predicted Temperature (°C)",
 
-                        data:
-                            temperatures,
+                            data:
+                                temperatures,
 
-                        borderWidth: 3,
+                            borderWidth: 3,
 
-                        tension: 0.35,
+                            tension: 0.35,
 
-                        fill: true,
+                            fill: true,
 
-                        pointRadius: 4,
+                            pointRadius: 4,
 
-                        pointHoverRadius: 7
+                            pointHoverRadius: 7
 
-                    }
+                        }
 
-                ]
-
-            },
-
-
-            options: {
-
-                responsive: true,
-
-                maintainAspectRatio: false,
-
-
-                interaction: {
-
-                    intersect: false,
-
-                    mode: "index"
+                    ]
 
                 },
 
 
-                plugins: {
+                options: {
 
-                    legend: {
+                    responsive: true,
 
-                        display: true
+                    maintainAspectRatio: false,
+
+
+                    interaction: {
+
+                        intersect: false,
+
+                        mode: "index"
 
                     },
 
 
-                    tooltip: {
+                    plugins: {
 
-                        callbacks: {
+                        legend: {
 
-                            label: function(context) {
+                            display: true
 
-                                return (
-                                    " Temperature: " +
-                                    context.parsed.y +
-                                    " °C"
-                                );
+                        },
+
+
+                        tooltip: {
+
+                            callbacks: {
+
+                                label:
+                                    function(context) {
+
+                                        return (
+                                            " Temperature: " +
+                                            context.parsed.y +
+                                            " °C"
+                                        );
+
+                                    }
 
                             }
 
                         }
 
-                    }
-
-                },
-
-
-                scales: {
-
-                    x: {
-
-                        title: {
-
-                            display: true,
-
-                            text:
-                                "Time"
-
-                        },
-
-                        ticks: {
-
-                            maxTicksLimit: 12
-
-                        }
-
                     },
 
 
-                    y: {
+                    scales: {
 
-                        title: {
+                        x: {
 
-                            display: true,
+                            title: {
 
-                            text:
-                                "Temperature (°C)"
+                                display: true,
+
+                                text:
+                                    "Time"
+
+                            },
+
+                            ticks: {
+
+                                maxTicksLimit:
+                                    12
+
+                            }
+
+                        },
+
+
+                        y: {
+
+                            title: {
+
+                                display: true,
+
+                                text:
+                                    "Temperature (°C)"
+
+                            }
 
                         }
 
@@ -424,9 +1208,7 @@ function createHourlyChart(predictions) {
 
             }
 
-        }
-
-    );
+        );
 
 }
 
@@ -442,21 +1224,27 @@ function setApiStatus(
 
     apiStatus.innerHTML = `
 
-        <span
-            class="status-dot">
-        </span>
+        <span class="status-dot"></span>
 
         ${text}
 
     `;
 
 
-    apiStatus
-        .querySelector(".status-dot")
-        .style.background =
+    const dot =
+        apiStatus.querySelector(
+            ".status-dot"
+        );
+
+
+    if (dot) {
+
+        dot.style.background =
             online
                 ? "#35d07f"
                 : "#ff6262";
+
+    }
 
 }
 
@@ -498,6 +1286,7 @@ async function checkApi() {
 
     }
 
+
     catch (error) {
 
         setApiStatus(
@@ -506,7 +1295,13 @@ async function checkApi() {
         );
 
 
-        console.error(error);
+        console.error(
+            "FastAPI health check:",
+            error
+        );
+
+
+        return null;
 
     }
 
@@ -521,22 +1316,59 @@ function formatDate(
     dateString
 ) {
 
-    return new Date(
-        dateString + "T00:00:00"
-    ).toLocaleDateString(
+    if (!dateString) {
 
+        return "--";
+
+    }
+
+
+    /*
+     * Handles:
+     *
+     * 2026-09-27
+     * 2026-09-27T00:00:00
+     */
+
+    const normalized =
+        String(
+            dateString
+        ).includes("T")
+            ? String(dateString)
+            : `${dateString}T00:00:00`;
+
+
+    const date =
+        new Date(
+            normalized
+        );
+
+
+    if (
+        Number.isNaN(
+            date.getTime()
+        )
+    ) {
+
+        return dateString;
+
+    }
+
+
+    return date.toLocaleDateString(
         "en-IN",
-
         {
 
-            weekday: "short",
+            weekday:
+                "short",
 
-            day: "numeric",
+            day:
+                "numeric",
 
-            month: "short"
+            month:
+                "short"
 
         }
-
     );
 
 }
@@ -549,6 +1381,13 @@ function formatDate(
 async function loadForecast(
     city
 ) {
+
+    if (!city) {
+
+        return;
+
+    }
+
 
     searchBtn.disabled =
         true;
@@ -585,11 +1424,26 @@ async function loadForecast(
         city;
 
 
+    /*
+     * Keep dropdown synchronized.
+     */
+
+    citySelect.value =
+        city;
+
+
+    /*
+     * Move map to selected city.
+     */
+
     const coords =
         CITY_COORDS[city];
 
 
-    if (coords) {
+    if (
+        coords &&
+        map
+    ) {
 
         map.flyTo(
 
@@ -598,13 +1452,16 @@ async function loadForecast(
             6,
 
             {
-                duration: 1.2
+                duration:
+                    1.2
             }
 
         );
 
 
-        if (markers[city]) {
+        if (
+            markers[city]
+        ) {
 
             markers[city].openPopup();
 
@@ -616,11 +1473,16 @@ async function loadForecast(
     try {
 
         /*
-         * Three real FastAPI endpoints:
+         * Three FastAPI endpoints:
          *
-         * /predict/{city}
-         * /predict/tomorrow/{city}
-         * /predict/10days/{city}
+         * 1. XGBoost
+         *    /predict/{city}
+         *
+         * 2. GRU 24-hour
+         *    /predict/tomorrow/{city}
+         *
+         * 3. GRU 10-day
+         *    /predict/10days/{city}
          */
 
         const [
@@ -648,9 +1510,31 @@ async function loadForecast(
         ]);
 
 
+        /*
+         * If token expired, apiFetch()
+         * already moved the user to login.
+         */
+
+        if (
+            nextHourResponse.status === 401 ||
+            hourlyResponse.status === 401 ||
+            forecastResponse.status === 401
+        ) {
+
+            return;
+
+        }
+
+
         if (!nextHourResponse.ok) {
 
+            const errorData =
+                await safeJson(
+                    nextHourResponse
+                );
+
             throw new Error(
+                errorData.detail ||
                 `Next-hour API error: ${nextHourResponse.status}`
             );
 
@@ -659,7 +1543,13 @@ async function loadForecast(
 
         if (!hourlyResponse.ok) {
 
+            const errorData =
+                await safeJson(
+                    hourlyResponse
+                );
+
             throw new Error(
+                errorData.detail ||
                 `24-hour API error: ${hourlyResponse.status}`
             );
 
@@ -668,7 +1558,13 @@ async function loadForecast(
 
         if (!forecastResponse.ok) {
 
+            const errorData =
+                await safeJson(
+                    forecastResponse
+                );
+
             throw new Error(
+                errorData.detail ||
                 `10-day API error: ${forecastResponse.status}`
             );
 
@@ -688,53 +1584,61 @@ async function loadForecast(
 
 
         /* ====================================================
-           CURRENT / NEXT HOUR
+           CURRENT TEMPERATURE
         ==================================================== */
 
         currentTemp.textContent =
-            nextHourData.latest_temperature;
+            formatTemperature(
+                nextHourData.latest_temperature
+            );
 
+
+        /* ====================================================
+           NEXT HOUR
+        ==================================================== */
 
         nextHour.textContent =
-            `${nextHourData.predicted_temperature} °C`;
+            `${formatTemperature(
+                nextHourData.predicted_temperature
+            )} °C`;
 
 
         nextHourTime.textContent =
             `For ${
-                new Date(
+                formatDateTime(
                     nextHourData.prediction_time
-                ).toLocaleString("en-IN")
+                )
             }`;
 
 
         /* ====================================================
-           24 HOUR GRAPH
+           24-HOUR GRAPH
         ==================================================== */
 
         createHourlyChart(
-            hourlyData.predictions
+            hourlyData.predictions || []
         );
 
 
         hourlyStatus.textContent =
-            `${hourlyData.forecast_hours} hourly predictions`;
+            `${hourlyData.forecast_hours || 0} hourly predictions`;
 
 
         /* ====================================================
-           10 DAY FORECAST
+           10-DAY FORECAST
         ==================================================== */
 
         forecastDays.textContent =
-            `${forecastData.forecast_days} days`;
+            `${forecastData.forecast_days || 0} days`;
 
 
         renderForecast(
-            forecastData.daily_forecast
+            forecastData.daily_forecast || []
         );
 
 
         forecastStatus.textContent =
-            `${forecastData.forecast_hours} hourly predictions`;
+            `${forecastData.forecast_hours || 0} hourly predictions`;
 
 
         setApiStatus(
@@ -747,7 +1651,10 @@ async function loadForecast(
 
     catch (error) {
 
-        console.error(error);
+        console.error(
+            `Forecast error for ${city}:`,
+            error
+        );
 
 
         forecastGrid.innerHTML = `
@@ -765,8 +1672,10 @@ async function loadForecast(
                     "
                 >
 
-                    Make sure FastAPI is running
-                    on port 8000.
+                    ${escapeHtml(
+                        error.message ||
+                        "An unexpected error occurred."
+                    )}
 
                 </p>
 
@@ -800,6 +1709,153 @@ async function loadForecast(
 
 
 /* ============================================================
+   SAFE JSON RESPONSE
+============================================================ */
+
+async function safeJson(
+    response
+) {
+
+    try {
+
+        return await response.json();
+
+    }
+
+    catch {
+
+        return {};
+
+    }
+
+}
+
+
+/* ============================================================
+   FORMAT TEMPERATURE
+============================================================ */
+
+function formatTemperature(
+    value
+) {
+
+    if (
+        value === null ||
+        value === undefined ||
+        value === ""
+    ) {
+
+        return "--";
+
+    }
+
+
+    const number =
+        Number(value);
+
+
+    if (
+        Number.isNaN(number)
+    ) {
+
+        return value;
+
+    }
+
+
+    return number.toFixed(2);
+
+}
+
+
+/* ============================================================
+   FORMAT DATE + TIME
+============================================================ */
+
+function formatDateTime(
+    dateString
+) {
+
+    if (!dateString) {
+
+        return "--";
+
+    }
+
+
+    const date =
+        new Date(
+            dateString
+        );
+
+
+    if (
+        Number.isNaN(
+            date.getTime()
+        )
+    ) {
+
+        return dateString;
+
+    }
+
+
+    return date.toLocaleString(
+        "en-IN",
+        {
+
+            day:
+                "numeric",
+
+            month:
+                "short",
+
+            hour:
+                "2-digit",
+
+            minute:
+                "2-digit"
+
+        }
+    );
+
+}
+
+
+/* ============================================================
+   ESCAPE HTML
+============================================================ */
+
+function escapeHtml(
+    value
+) {
+
+    return String(value)
+        .replace(
+            /&/g,
+            "&amp;"
+        )
+        .replace(
+            /</g,
+            "&lt;"
+        )
+        .replace(
+            />/g,
+            "&gt;"
+        )
+        .replace(
+            /"/g,
+            "&quot;"
+        )
+        .replace(
+            /'/g,
+            "&#039;"
+        );
+
+}
+
+
+/* ============================================================
    RENDER 10-DAY FORECAST
 ============================================================ */
 
@@ -809,6 +1865,26 @@ function renderForecast(
 
     forecastGrid.innerHTML =
         "";
+
+
+    if (
+        !days ||
+        days.length === 0
+    ) {
+
+        forecastGrid.innerHTML = `
+
+            <div class="forecast-item">
+
+                No forecast data available.
+
+            </div>
+
+        `;
+
+        return;
+
+    }
 
 
     days.forEach(
@@ -828,25 +1904,35 @@ function renderForecast(
 
                 <div class="day">
 
-                    Day ${day.day}
+                    Day ${escapeHtml(
+                        day.day
+                    )}
 
                 </div>
 
 
                 <div class="date">
 
-                    ${formatDate(day.date)}
+                    ${escapeHtml(
+                        formatDate(
+                            day.date
+                        )
+                    )}
 
                 </div>
 
 
                 <div class="forecast-temp">
 
-                    ${day.max_temperature}°C
+                    ${formatTemperature(
+                        day.max_temperature
+                    )}°C
 
                     <span>
                         /
-                        ${day.min_temperature}°C
+                        ${formatTemperature(
+                            day.min_temperature
+                        )}°C
                     </span>
 
                 </div>
@@ -855,7 +1941,9 @@ function renderForecast(
                 <div class="avg">
 
                     Average
-                    ${day.avg_temperature}°C
+                    ${formatTemperature(
+                        day.avg_temperature
+                    )}°C
 
                 </div>
 
@@ -877,9 +1965,7 @@ function renderForecast(
 ============================================================ */
 
 searchBtn.addEventListener(
-
     "click",
-
     () => {
 
         loadForecast(
@@ -887,7 +1973,6 @@ searchBtn.addEventListener(
         );
 
     }
-
 );
 
 
@@ -896,9 +1981,7 @@ searchBtn.addEventListener(
 ============================================================ */
 
 citySelect.addEventListener(
-
     "change",
-
     () => {
 
         const city =
@@ -909,7 +1992,10 @@ citySelect.addEventListener(
             CITY_COORDS[city];
 
 
-        if (coords) {
+        if (
+            coords &&
+            map
+        ) {
 
             map.flyTo(
 
@@ -918,40 +2004,100 @@ citySelect.addEventListener(
                 6,
 
                 {
-                    duration: 1.0
+                    duration:
+                        1.0
                 }
 
             );
 
 
-            markers[city].openPopup();
+            if (
+                markers[city]
+            ) {
+
+                markers[city].openPopup();
+
+            }
 
         }
 
     }
-
 );
 
 
 /* ============================================================
-   INITIAL LOAD
+   INITIALIZE APPLICATION
 ============================================================ */
 
 async function initializeApp() {
+
+    /*
+     * No saved JWT.
+     * Show login screen.
+     */
+
     if (!accessToken) {
+
         showAuthScreen();
+
         return;
+
     }
 
+
     try {
-        const response = await apiFetch("/auth/me");
+
+        /*
+         * Verify saved JWT.
+         */
+
+        const response =
+            await apiFetch(
+                "/auth/me"
+            );
+
+
         if (!response.ok) {
+
+            showAuthScreen(
+                "Your session has expired. Please log in again."
+            );
+
             return;
+
         }
-        showDashboard(await response.json());
-    } catch (error) {
-        showAuthScreen("Unable to restore your session. Please log in again.");
+
+
+        const user =
+            await response.json();
+
+
+        await showDashboard(
+            user
+        );
+
     }
+
+
+    catch (error) {
+
+        console.error(
+            "Session restoration error:",
+            error
+        );
+
+
+        showAuthScreen(
+            "Unable to restore your session. Please log in again."
+        );
+
+    }
+
 }
+
+
+/* ============================================================
+   START APPLICATION
+============================================================ */
 
 initializeApp();

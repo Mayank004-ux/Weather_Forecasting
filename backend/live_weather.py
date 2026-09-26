@@ -1,29 +1,7 @@
 import requests
 import time
 
-
-CITIES = {
-    "Delhi": {
-        "latitude": 28.6139,
-        "longitude": 77.2090
-    },
-    "Mumbai": {
-        "latitude": 19.0760,
-        "longitude": 72.8777
-    },
-    "Bengaluru": {
-        "latitude": 12.9716,
-        "longitude": 77.5946
-    },
-    "Chennai": {
-        "latitude": 13.0827,
-        "longitude": 80.2707
-    },
-    "Bhopal": {
-        "latitude": 23.2599,
-        "longitude": 77.4126
-    }
-}
+from backend.cities import CITIES
 
 
 def get_live_weather(latitude, longitude):
@@ -97,26 +75,32 @@ def get_latest_hourly_weather(latitude, longitude):
     }
 
     for attempt in range(3):
+
         try:
+
             response = requests.get(
                 url,
                 params=params,
                 timeout=60
             )
+
             response.raise_for_status()
+
             return response.json()
 
         except requests.RequestException as e:
+
             if attempt == 2:
                 raise RuntimeError(
                     f"Open-Meteo request failed after 3 attempts: {e}"
                 ) from e
+
             time.sleep(5)
 
 
 if __name__ == "__main__":
 
-    for city, coordinates in CITIES.items():
+    for city, data in CITIES.items():
 
         print("\n" + "=" * 50)
         print(f"LIVE WEATHER: {city}")
@@ -125,16 +109,29 @@ if __name__ == "__main__":
         try:
 
             weather = get_live_weather(
-                coordinates["latitude"],
-                coordinates["longitude"]
+                data["latitude"],
+                data["longitude"]
             )
 
             current = weather["current"]
 
+            print("State:", data["state"])
             print("Time:", current["time"])
-            print("Temperature:", current["temperature_2m"], "°C")
-            print("Humidity:", current["relative_humidity_2m"], "%")
-            print("Dew Point:", current["dew_point_2m"], "°C")
+            print(
+                "Temperature:",
+                current["temperature_2m"],
+                "°C"
+            )
+            print(
+                "Humidity:",
+                current["relative_humidity_2m"],
+                "%"
+            )
+            print(
+                "Dew Point:",
+                current["dew_point_2m"],
+                "°C"
+            )
 
             print(
                 "Apparent Temperature:",
@@ -142,8 +139,17 @@ if __name__ == "__main__":
                 "°C"
             )
 
-            print("Precipitation:", current["precipitation"], "mm")
-            print("Rain:", current["rain"], "mm")
+            print(
+                "Precipitation:",
+                current["precipitation"],
+                "mm"
+            )
+
+            print(
+                "Rain:",
+                current["rain"],
+                "mm"
+            )
 
             print(
                 "Surface Pressure:",
@@ -151,8 +157,17 @@ if __name__ == "__main__":
                 "hPa"
             )
 
-            print("Cloud Cover:", current["cloud_cover"], "%")
-            print("Wind Speed:", current["wind_speed_10m"], "km/h")
+            print(
+                "Cloud Cover:",
+                current["cloud_cover"],
+                "%"
+            )
+
+            print(
+                "Wind Speed:",
+                current["wind_speed_10m"],
+                "km/h"
+            )
 
             print(
                 "Wind Direction:",

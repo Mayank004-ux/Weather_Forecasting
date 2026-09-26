@@ -9,14 +9,29 @@ import requests
 from fastapi import Depends, FastAPI, HTTPException, status
 from tensorflow.keras.models import load_model
 
-from backend.live_weather import CITIES, get_latest_hourly_weather
-from backend.feature_engineering import create_features, FEATURE_COLUMNS
-from backend.model_loader import xgb_model, scaler
 from fastapi.middleware.cors import CORSMiddleware
-from backend.auth import create_access_token, get_current_user, hash_password, verify_password
+
+from backend.cities import CITIES
+from backend.live_weather import get_latest_hourly_weather
+from backend.feature_engineering import create_features, FEATURE_COLUMNS
+from backend.auth import (
+    create_access_token,
+    get_current_user,
+    hash_password,
+    verify_password
+)
 from backend.config import get_cors_origins
-from backend.database import create_user, get_user_by_email, initialize_database
-from backend.schemas import LoginRequest, RegisterRequest, TokenResponse, UserResponse
+from backend.database import (
+    create_user,
+    get_user_by_email,
+    initialize_database
+)
+from backend.schemas import (
+    LoginRequest,
+    RegisterRequest,
+    TokenResponse,
+    UserResponse
+)
 
 
 # ============================================================
@@ -28,7 +43,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 MODEL_DIR = BASE_DIR / "models"
 DATA_DIR = BASE_DIR / "data" / "raw"
 
-CSV_PATH = DATA_DIR / "Weather_Forecasting.csv"
+CSV_PATH = DATA_DIR / "Weather_Forecasting_final.csv"
 
 XGB_MODEL_PATH = MODEL_DIR / "xgboost.pkl"
 SCALER_PATH = MODEL_DIR / "scaler.pkl"
@@ -43,7 +58,6 @@ print("Loading models...")
 
 xgb_model = joblib.load(XGB_MODEL_PATH)
 
-# Scaler is used for GRU / sequence models.
 scaler = joblib.load(SCALER_PATH)
 
 gru_model = load_model(GRU_MODEL_PATH)
@@ -66,9 +80,11 @@ historical_df["time"] = pd.to_datetime(
     format="mixed"
 )
 
-historical_df = historical_df.sort_values(
-    ["city", "time"]
-).reset_index(drop=True)
+historical_df = (
+    historical_df
+    .sort_values(["city", "time"])
+    .reset_index(drop=True)
+)
 
 print("Historical dataset loaded.")
 print("Rows:", len(historical_df))
@@ -95,59 +111,130 @@ app.add_middleware(
 initialize_database()
 
 
-@app.post("/auth/register", response_model=TokenResponse, status_code=status.HTTP_201_CREATED)
+# ============================================================
+# AUTHENTICATION
+# ============================================================
+
+@app.post(
+    "/auth/register",
+    response_model=TokenResponse,
+    status_code=status.HTTP_201_CREATED
+)
 def register_user(payload: RegisterRequest):
-    """Create an account and return an access token for the new session."""
+
+    """Create an account and return an access token."""
+
     email = payload.email.strip().lower()
 
     if get_user_by_email(email):
-        raise HTTPException(status_code=409, detail="An account with this email already exists.")
 
-    try:
-        user = create_user(email, hash_password(payload.password))
-    except sqlite3.IntegrityError as error:
-        # Covers a simultaneous request attempting to create the same email.
-        raise HTTPException(status_code=409, detail="An account with this email already exists.") from error
-
-    return {"access_token": create_access_token(user["email"]), "user": user}
-
-
-@app.post("/auth/login", response_model=TokenResponse)
-def login_user(payload: LoginRequest):
-    """Verify credentials and issue a signed, time-limited JWT."""
-    email = payload.email.strip().lower()
-    user = get_user_by_email(email)
-
-    if not user or not verify_password(payload.password, user["password_hash"]):
-        raise HTTPException(status_code=401, detail="Incorrect email or password.")
-
-    return {"access_token": create_access_token(user["email"]), "user": user}
-
-
-@app.get("/auth/me", response_model=UserResponse)
-def get_me(current_user: dict = Depends(get_current_user)):
-    return current_user
-
-def normalize_city(city: str) -> str:
-    city = city.strip().lower()
-
-    city_map = {
-        "delhi": "Delhi",
-        "mumbai": "Mumbai",
-        "bengaluru": "Bengaluru",
-        "chennai": "Chennai",
-        "bhopal": "Bhopal"
-    }
-
-    if city not in city_map:
         raise HTTPException(
-            status_code=404,
-            detail=f"City '{city}' is not supported."
+            status_code=409,
+            detail="An account with this email already exists."
         )
 
-    return city_map[city]
+    try:
+
+        user = create_user(
+            email,
+            hash_password(payload.password)
+        )
+
+    except sqlite3.IntegrityError as error:
+
+        raise HTTPException(
+            status_code=409,
+            detail="An account with this email already exists."
+        ) from error
+
+    return {
+        "access_token": create_access_token(user["email"]),
+        "user": user
+    }
+
+
+@app.post(
+    "/auth/login",
+    response_model=TokenResponse
+)
+def login_user(payload: LoginRequest):
+
+    """Verify credentials and issue a JWT."""
+
+    email = payload.email.strip().lower()
+
+    user = get_user_by_email(email)
+
+    if not user or not verify_password(
+        payload.password,
+        user["password_hash"]
+    ):
+
+        raise HTTPException(
+            status_code=401,
+            detail="Incorrect email or password."
+        )
+
+    return {
+        "access_token": create_access_token(user["email"]),
+        "user": user
+    }
+
+
+@app.get(
+    "/auth/me",
+    response_model=UserResponse
+)
+def get_me(
+    current_user: dict = Depends(get_current_user)
+):
+
+    return current_user
+
+
 # ============================================================
-# COMBINE HISTORICAL + LATEST WEATHER DATA
+# CITY NORMALIZATION
+# ============================================================
+
+def normalize_city(city: str) -> str:
+
+    """
+    Normalize user-provided city name and validate
+    it against the central CITIES dictionary.
+    """
+
+    city = city.strip()
+
+    aliases = {
+        "new delhi": "Delhi",
+        "delhi": "Delhi"
+    }
+
+    if city.lower() in aliases:
+
+        return aliases[city.lower()]
+
+    for supported_city in CITIES.keys():
+
+        if city.lower() == supported_city.lower():
+
+            return supported_city
+
+    raise HTTPException(
+        status_code=404,
+        detail=f"City '{city}' is not supported."
+    )
+
+
+# ============================================================
+# CONSTANTS
+# ============================================================
+
+TIME_STEPS = 24
+
+
+# ============================================================
+# COMBINE HISTORICAL + LIVE WEATHER DATA
 # ============================================================
 
 def get_combined_weather_data(city: str):
@@ -155,6 +242,7 @@ def get_combined_weather_data(city: str):
     city = normalize_city(city)
 
     if city not in CITIES:
+
         raise HTTPException(
             status_code=404,
             detail=f"City '{city}' is not supported."
@@ -171,13 +259,14 @@ def get_combined_weather_data(city: str):
     ].copy()
 
     if city_history.empty:
+
         raise HTTPException(
             status_code=404,
             detail=f"No historical data found for {city}."
         )
 
     # --------------------------------------------------------
-    # Latest hourly weather from Open-Meteo
+    # Live Open-Meteo hourly data
     # --------------------------------------------------------
 
     try:
@@ -197,17 +286,26 @@ def get_combined_weather_data(city: str):
     hourly = live_data.get("hourly")
 
     if hourly is None:
+
         raise HTTPException(
             status_code=503,
-            detail="Hourly weather data was not returned by the weather API."
+            detail=(
+                "Hourly weather data was not returned "
+                "by the weather API."
+            )
         )
 
     live_df = pd.DataFrame(hourly)
 
-    # Add city information
     live_df["city"] = city
-    live_df["state"] = city_info.get("state", "")
+
+    live_df["state"] = city_info.get(
+        "state",
+        ""
+    )
+
     live_df["latitude"] = city_info["latitude"]
+
     live_df["longitude"] = city_info["longitude"]
 
     live_df["time"] = pd.to_datetime(
@@ -220,12 +318,13 @@ def get_combined_weather_data(city: str):
     # --------------------------------------------------------
 
     combined_df = pd.concat(
-        [city_history, live_df],
+        [
+            city_history,
+            live_df
+        ],
         ignore_index=True
     )
 
-    # If the live API contains timestamps that already exist
-    # in historical data, keep the latest API observation.
     combined_df = (
         combined_df
         .drop_duplicates(
@@ -261,7 +360,9 @@ def root():
 # ============================================================
 
 @app.get("/cities")
-def get_cities(current_user: dict = Depends(get_current_user)):
+def get_cities(
+    current_user: dict = Depends(get_current_user)
+):
 
     return {
         "cities": list(CITIES.keys())
@@ -289,89 +390,86 @@ def health():
 # ============================================================
 
 @app.get("/predict/{city}")
-def predict_next_hour(city: str, current_user: dict = Depends(get_current_user)):
+def predict_next_hour(
+    city: str,
+    current_user: dict = Depends(get_current_user)
+):
 
     city = normalize_city(city)
 
     # --------------------------------------------------------
-    # Get historical + latest weather data
+    # Get historical + live weather data
     # --------------------------------------------------------
 
     combined_df = get_combined_weather_data(city)
 
     # --------------------------------------------------------
-    # Create the same 25 features used during training
-    # --------------------------------------------------------
-
-    featured_df = create_features(combined_df)
-
-    # Remove rows where lag/rolling features cannot exist
-    featured_df = featured_df.dropna(
-        subset=FEATURE_COLUMNS
-    ).reset_index(drop=True)
-
-    if featured_df.empty:
-        raise HTTPException(
-            status_code=500,
-            detail="Unable to create prediction features."
-        )
-
-    # --------------------------------------------------------
     # IMPORTANT:
-    # Select the latest time that is NOT in the future.
-    #
-    # The live Open-Meteo data may contain future hourly
-    # forecast records. Therefore, we must NOT simply use:
-    #
-    # featured_df.iloc[-1]
+    # Remove future Open-Meteo forecast rows BEFORE
+    # creating features.
     # --------------------------------------------------------
 
     current_time = pd.Timestamp.now(
         tz="Asia/Kolkata"
     ).tz_localize(None)
 
-    # Make sure time column is datetime
-    featured_df["time"] = pd.to_datetime(
-        featured_df["time"]
+    combined_df["time"] = pd.to_datetime(
+        combined_df["time"],
+        format="mixed"
     )
 
-    # Remove future records
-    available_df = featured_df[
-        featured_df["time"] <= current_time
+    available_weather = combined_df[
+        combined_df["time"] <= current_time
     ].copy()
 
-    if available_df.empty:
+    if available_weather.empty:
+
         raise HTTPException(
             status_code=500,
             detail="No weather data available up to the current time."
         )
 
     # --------------------------------------------------------
-    # Latest actual/current available observation
+    # Create 25 features
     # --------------------------------------------------------
 
-    latest_row = available_df.iloc[-1]
+    featured_df = create_features(
+        available_weather
+    )
+
+    featured_df = (
+        featured_df
+        .dropna(subset=FEATURE_COLUMNS)
+        .reset_index(drop=True)
+    )
+
+    if featured_df.empty:
+
+        raise HTTPException(
+            status_code=500,
+            detail="Unable to create prediction features."
+        )
+
+    # --------------------------------------------------------
+    # Latest actual available observation
+    # --------------------------------------------------------
+
+    latest_row = featured_df.iloc[-1]
 
     latest_time = pd.Timestamp(
         latest_row["time"]
     )
 
-    latest_features = latest_row[
-        FEATURE_COLUMNS
-    ].to_numpy(
-        dtype=float
-    ).reshape(1, -1)
+    latest_features = (
+        latest_row[
+            FEATURE_COLUMNS
+        ]
+        .to_numpy(dtype=float)
+        .reshape(1, -1)
+    )
 
     # --------------------------------------------------------
-    # IMPORTANT:
-    #
-    # XGBoost was trained using RAW X_train.
-    #
-    # Therefore DO NOT use:
-    #
-    # scaler.transform(latest_features)
-    #
-    # here.
+    # XGBoost uses RAW features
     # --------------------------------------------------------
 
     prediction = xgb_model.predict(
@@ -382,20 +480,17 @@ def predict_next_hour(city: str, current_user: dict = Depends(get_current_user))
         prediction[0]
     )
 
-    # --------------------------------------------------------
-    # Next hour
-    # --------------------------------------------------------
-
     prediction_time = (
         latest_time
         + pd.Timedelta(hours=1)
     )
 
     # --------------------------------------------------------
-    # Return result
+    # Response
     # --------------------------------------------------------
 
     return {
+
         "city": city,
 
         "latest_data_time": str(
@@ -427,12 +522,14 @@ def predict_next_hour(city: str, current_user: dict = Depends(get_current_user))
 
 
 # ============================================================
-# 24-HOUR GRU FORECAST
+# 24-HOUR GRU FORECAST USING LIVE DATA
 # ============================================================
 
-TIME_STEPS = 24
 @app.get("/predict/tomorrow/{city}")
-def predict_next_24_hours(city: str, current_user: dict = Depends(get_current_user)):
+def predict_next_24_hours(
+    city: str,
+    current_user: dict = Depends(get_current_user)
+):
 
     # --------------------------------------------------------
     # Validate city
@@ -440,50 +537,190 @@ def predict_next_24_hours(city: str, current_user: dict = Depends(get_current_us
 
     city = normalize_city(city)
 
-    # --------------------------------------------------------
-    # Get historical + latest weather data
-    # --------------------------------------------------------
-
-    combined_df = get_combined_weather_data(city)
+    city_info = CITIES[city]
 
     # --------------------------------------------------------
-    # Create the same 25 features used during training
+    # Get live Open-Meteo hourly data
     # --------------------------------------------------------
 
-    featured_df = create_features(combined_df)
+    try:
 
-    featured_df = featured_df.dropna(
-        subset=FEATURE_COLUMNS
-    ).reset_index(drop=True)
+        live_data = get_latest_hourly_weather(
+            city_info["latitude"],
+            city_info["longitude"]
+        )
 
-    if len(featured_df) < TIME_STEPS:
+    except requests.RequestException as e:
+
         raise HTTPException(
-            status_code=500,
-            detail="Not enough data to create a 24-hour GRU forecast."
+            status_code=503,
+            detail=f"Unable to retrieve live weather data: {str(e)}"
+        )
+
+    if "hourly" not in live_data:
+
+        raise HTTPException(
+            status_code=503,
+            detail="Hourly weather data was not returned by Open-Meteo."
         )
 
     # --------------------------------------------------------
-    # Take the latest 24 observations
+    # Convert API response to DataFrame
     # --------------------------------------------------------
 
-    latest_sequence = featured_df[
-        FEATURE_COLUMNS
-    ].tail(TIME_STEPS).to_numpy(
-        dtype=float
+    live_df = pd.DataFrame(
+        live_data["hourly"]
+    )
+
+    live_df["time"] = pd.to_datetime(
+        live_df["time"],
+        format="mixed"
+    )
+
+    live_df["city"] = city
+
+    live_df["state"] = city_info["state"]
+
+    live_df["latitude"] = city_info["latitude"]
+
+    live_df["longitude"] = city_info["longitude"]
+
+    # --------------------------------------------------------
+    # Current time
+    # --------------------------------------------------------
+
+    current_time = pd.Timestamp.now(
+        tz="Asia/Kolkata"
+    ).tz_localize(None)
+
+    # --------------------------------------------------------
+    # Past/current live observations
+    # --------------------------------------------------------
+
+    past_live = (
+        live_df[
+            live_df["time"] <= current_time
+        ]
+        .sort_values("time")
+        .reset_index(drop=True)
     )
 
     # --------------------------------------------------------
-    # Scale features
-    #
-    # GRU was trained using scaled features.
+    # Future live forecast
+    # --------------------------------------------------------
+
+    future_live = (
+        live_df[
+            live_df["time"] > current_time
+        ]
+        .sort_values("time")
+        .reset_index(drop=True)
+    )
+
+    if past_live.empty:
+
+        raise HTTPException(
+            status_code=503,
+            detail="No current live weather observation is available."
+        )
+
+    if len(future_live) < 24:
+
+        raise HTTPException(
+            status_code=503,
+            detail="Open-Meteo returned fewer than 24 future hours."
+        )
+
+    # --------------------------------------------------------
+    # Historical data
+    # --------------------------------------------------------
+
+    city_history = historical_df[
+        historical_df["city"] == city
+    ].copy()
+
+    if city_history.empty:
+
+        raise HTTPException(
+            status_code=404,
+            detail=f"No historical data found for {city}."
+        )
+
+    # --------------------------------------------------------
+    # Historical + live past/current data
+    # --------------------------------------------------------
+
+    context_df = pd.concat(
+        [
+            city_history,
+            past_live
+        ],
+        ignore_index=True
+    )
+
+    context_df = (
+        context_df
+        .drop_duplicates(
+            subset=["city", "time"],
+            keep="last"
+        )
+        .sort_values("time")
+        .reset_index(drop=True)
+    )
+
+    # --------------------------------------------------------
+    # Create 25 features
+    # --------------------------------------------------------
+
+    featured_df = create_features(
+        context_df
+    )
+
+    featured_df = (
+        featured_df
+        .dropna(subset=FEATURE_COLUMNS)
+        .reset_index(drop=True)
+    )
+
+    if len(featured_df) < TIME_STEPS:
+
+        raise HTTPException(
+            status_code=500,
+            detail=(
+                "Not enough data to create "
+                "a 24-hour GRU forecast."
+            )
+        )
+
+    # --------------------------------------------------------
+    # Latest 24-hour sequence
+    # --------------------------------------------------------
+
+    latest_sequence = (
+        featured_df[
+            FEATURE_COLUMNS
+        ]
+        .tail(TIME_STEPS)
+        .to_numpy(dtype=float)
+    )
+
+    if not np.isfinite(
+        latest_sequence
+    ).all():
+
+        raise HTTPException(
+            status_code=500,
+            detail="Invalid numerical values found in GRU input."
+        )
+
+    # --------------------------------------------------------
+    # Scale
     # --------------------------------------------------------
 
     scaled_sequence = scaler.transform(
         latest_sequence
     )
 
-    # Shape:
-    # (1, 24, 25)
     current_sequence = scaled_sequence.reshape(
         1,
         TIME_STEPS,
@@ -491,22 +728,25 @@ def predict_next_24_hours(city: str, current_user: dict = Depends(get_current_us
     )
 
     # --------------------------------------------------------
-    # Starting timestamp
+    # Latest LIVE timestamp
     # --------------------------------------------------------
 
-    last_time = pd.Timestamp(
-        featured_df.iloc[-1]["time"]
+    latest_live_time = pd.Timestamp(
+        past_live.iloc[-1]["time"]
     )
 
     # --------------------------------------------------------
-    # Recursive 24-hour forecasting
+    # Recursive 24-hour prediction
     # --------------------------------------------------------
 
     predictions = []
 
-    for step in range(1, 25):
+    temperature_index = FEATURE_COLUMNS.index(
+        "temperature_2m"
+    )
 
-        # Predict next temperature
+    for step in range(24):
+
         prediction = gru_model.predict(
             current_sequence,
             verbose=0
@@ -516,15 +756,14 @@ def predict_next_24_hours(city: str, current_user: dict = Depends(get_current_us
             prediction[0][0]
         )
 
-        # Forecast timestamp
-        forecast_time = (
-            last_time
-            + pd.Timedelta(hours=step)
+        forecast_time = pd.Timestamp(
+            future_live.iloc[step]["time"]
         )
 
         predictions.append(
             {
                 "time": str(forecast_time),
+
                 "predicted_temperature": round(
                     predicted_temperature,
                     2
@@ -533,35 +772,32 @@ def predict_next_24_hours(city: str, current_user: dict = Depends(get_current_us
         )
 
         # ----------------------------------------------------
-        # Recursive update
-        #
-        # The predicted temperature becomes the temperature
-        # used in the next sequence.
-        #
-        # Other feature values are kept from the latest
-        # available observation.
+        # Recursive temperature update
         # ----------------------------------------------------
 
-        next_row = current_sequence[0, -1, :].copy()
+        next_row = current_sequence[
+            0,
+            -1,
+            :
+        ].copy()
 
-        # Find scaled temperature feature
-        temperature_index = FEATURE_COLUMNS.index(
-            "temperature_2m"
-        )
+        temperature_mean = scaler.mean_[
+            temperature_index
+        ]
 
-        # Scale predicted temperature using the same scaler
-        temperature_mean = scaler.mean_[temperature_index]
-        temperature_scale = scaler.scale_[temperature_index]
+        temperature_scale = scaler.scale_[
+            temperature_index
+        ]
 
         scaled_predicted_temperature = (
-            predicted_temperature - temperature_mean
+            predicted_temperature
+            - temperature_mean
         ) / temperature_scale
 
-        next_row[temperature_index] = (
-            scaled_predicted_temperature
-        )
+        next_row[
+            temperature_index
+        ] = scaled_predicted_temperature
 
-        # Shift the sequence forward by one hour
         current_sequence = np.concatenate(
             [
                 current_sequence[:, 1:, :],
@@ -575,16 +811,29 @@ def predict_next_24_hours(city: str, current_user: dict = Depends(get_current_us
     # --------------------------------------------------------
 
     return {
+
         "city": city,
+
         "model": "GRU",
+
         "forecast_hours": 24,
-        "features": len(FEATURE_COLUMNS),
+
+        "features": len(
+            FEATURE_COLUMNS
+        ),
+
         "time_steps": TIME_STEPS,
-        "last_data_time": str(last_time),
+
+        "last_data_time": str(
+            latest_live_time
+        ),
+
         "predictions": predictions
     }
+
+
 # ============================================================
-# 10-DAY GRU FORECAST USING OPEN-METEO FUTURE WEATHER DATA
+# 10-DAY GRU FORECAST DATA
 # ============================================================
 
 def get_10_day_weather_data(city: str):
@@ -594,6 +843,7 @@ def get_10_day_weather_data(city: str):
     # --------------------------------------------------------
 
     if city not in CITIES:
+
         raise HTTPException(
             status_code=404,
             detail=f"City '{city}' is not supported."
@@ -606,27 +856,31 @@ def get_10_day_weather_data(city: str):
     # --------------------------------------------------------
 
     try:
+
         weather_data = get_latest_hourly_weather(
             city_info["latitude"],
             city_info["longitude"]
         )
+
     except requests.RequestException as e:
+
         raise HTTPException(
             status_code=503,
             detail=f"Unable to retrieve Open-Meteo data: {str(e)}"
         )
 
-    # --------------------------------------------------------
-    # Check API response
-    # --------------------------------------------------------
-
     if "hourly" not in weather_data:
+
         raise HTTPException(
             status_code=503,
             detail="Open-Meteo did not return hourly weather data."
         )
 
     hourly = weather_data["hourly"]
+
+    # --------------------------------------------------------
+    # Required columns
+    # --------------------------------------------------------
 
     required_columns = [
         "time",
@@ -643,10 +897,6 @@ def get_10_day_weather_data(city: str):
         "wind_gusts_10m"
     ]
 
-    # --------------------------------------------------------
-    # Check required API columns
-    # --------------------------------------------------------
-
     missing_columns = [
         column
         for column in required_columns
@@ -654,9 +904,13 @@ def get_10_day_weather_data(city: str):
     ]
 
     if missing_columns:
+
         raise HTTPException(
             status_code=503,
-            detail=f"Missing Open-Meteo columns: {missing_columns}"
+            detail=(
+                f"Missing Open-Meteo columns: "
+                f"{missing_columns}"
+            )
         )
 
     # --------------------------------------------------------
@@ -675,8 +929,81 @@ def get_10_day_weather_data(city: str):
 
     api_df["city"] = city
 
+    api_df["state"] = city_info["state"]
+
+    api_df["latitude"] = city_info["latitude"]
+
+    api_df["longitude"] = city_info["longitude"]
+
     # --------------------------------------------------------
-    # Historical data for selected city
+    # Current time
+    # --------------------------------------------------------
+
+    current_time = pd.Timestamp.now(
+        tz="Asia/Kolkata"
+    ).tz_localize(None)
+
+    # --------------------------------------------------------
+    # LIVE PAST / CURRENT DATA
+    # --------------------------------------------------------
+
+    past_live = (
+        api_df[
+            api_df["time"] <= current_time
+        ]
+        .sort_values("time")
+        .drop_duplicates(
+            subset=["city", "time"],
+            keep="last"
+        )
+        .reset_index(drop=True)
+    )
+
+    # --------------------------------------------------------
+    # LIVE FUTURE DATA
+    # --------------------------------------------------------
+
+    future_live = (
+        api_df[
+            api_df["time"] > current_time
+        ]
+        .sort_values("time")
+        .drop_duplicates(
+            subset=["city", "time"],
+            keep="last"
+        )
+        .reset_index(drop=True)
+    )
+
+    # --------------------------------------------------------
+    # Need at least 24 live context hours
+    # and 240 future hours
+    # --------------------------------------------------------
+
+    if len(past_live) < 24:
+
+        raise HTTPException(
+            status_code=503,
+            detail=(
+                "Open-Meteo returned insufficient "
+                "live context data."
+            )
+        )
+
+    if len(future_live) < 240:
+
+        raise HTTPException(
+            status_code=503,
+            detail=(
+                "Open-Meteo returned insufficient "
+                "future forecast data. "
+                f"Expected 240 hours, "
+                f"got {len(future_live)}."
+            )
+        )
+
+    # --------------------------------------------------------
+    # Historical data
     # --------------------------------------------------------
 
     historical_city_df = historical_df[
@@ -684,10 +1011,15 @@ def get_10_day_weather_data(city: str):
     ].copy()
 
     if historical_city_df.empty:
+
         raise HTTPException(
             status_code=404,
             detail=f"No historical data found for {city}."
         )
+
+    # --------------------------------------------------------
+    # Required historical columns
+    # --------------------------------------------------------
 
     historical_columns = [
         "time",
@@ -705,9 +1037,12 @@ def get_10_day_weather_data(city: str):
         "city"
     ]
 
-    historical_city_df = historical_city_df[
-        historical_columns
-    ].copy()
+    historical_city_df = (
+        historical_city_df[
+            historical_columns
+        ]
+        .copy()
+    )
 
     historical_city_df["time"] = pd.to_datetime(
         historical_city_df["time"],
@@ -715,81 +1050,13 @@ def get_10_day_weather_data(city: str):
     )
 
     # --------------------------------------------------------
-    # Find last historical observation
-    # --------------------------------------------------------
-
-    last_historical_time = (
-        historical_city_df["time"].max()
-    )
-
-    # --------------------------------------------------------
-    # Only take API rows after historical data
-    # --------------------------------------------------------
-
-    new_api_data = api_df[
-        api_df["time"] > last_historical_time
-    ].copy()
-
-    new_api_data = (
-        new_api_data
-        .sort_values("time")
-        .drop_duplicates(
-            subset=["city", "time"],
-            keep="last"
-        )
-        .reset_index(drop=True)
-    )
-
-    # --------------------------------------------------------
-    # We need:
-    #
-    # 24 hours of context
-    # +
-    # 240 future hours
-    #
-    # Total = 264 hours
-    # --------------------------------------------------------
-
-    if len(new_api_data) < 264:
-        raise HTTPException(
-            status_code=503,
-            detail=(
-                "Open-Meteo returned insufficient hourly data. "
-                f"Expected at least 264 rows, got {len(new_api_data)}."
-            )
-        )
-
-    # --------------------------------------------------------
-    # First 24 rows = current/context data
-    # Remaining 240 = future forecast
-    # --------------------------------------------------------
-
-    current_context = new_api_data.iloc[:24].copy()
-
-    future_forecast = (
-        new_api_data
-        .iloc[24:264]
-        .copy()
-        .reset_index(drop=True)
-    )
-
-    if len(future_forecast) != 240:
-        raise HTTPException(
-            status_code=503,
-            detail=(
-                "Unable to obtain exactly 240 future forecast hours. "
-                f"Got {len(future_forecast)} hours."
-            )
-        )
-
-    # --------------------------------------------------------
-    # Historical + current Open-Meteo context
+    # Combine historical + LIVE past/current data
     # --------------------------------------------------------
 
     model_history = pd.concat(
         [
             historical_city_df,
-            current_context
+            past_live
         ],
         ignore_index=True
     )
@@ -804,7 +1071,31 @@ def get_10_day_weather_data(city: str):
         .reset_index(drop=True)
     )
 
-    return model_history, future_forecast
+    # --------------------------------------------------------
+    # Exactly next 240 LIVE forecast hours
+    # --------------------------------------------------------
+
+    future_forecast = (
+        future_live
+        .iloc[:240]
+        .copy()
+        .reset_index(drop=True)
+    )
+
+    if len(future_forecast) != 240:
+
+        raise HTTPException(
+            status_code=503,
+            detail=(
+                "Unable to obtain exactly "
+                "240 future forecast hours."
+            )
+        )
+
+    return (
+        model_history,
+        future_forecast
+    )
 
 
 # ============================================================
@@ -812,23 +1103,52 @@ def get_10_day_weather_data(city: str):
 # ============================================================
 
 @app.get("/predict/10days/{city}")
-def predict_next_10_days(city: str, current_user: dict = Depends(get_current_user)):
+def predict_next_10_days(
+    city: str,
+    current_user: dict = Depends(get_current_user)
+):
 
     city = normalize_city(city)
 
     try:
-        return predict_next_10_days_internal(city)
+
+        return predict_next_10_days_internal(
+            city
+        )
+
+    except HTTPException:
+
+        raise
+
     except Exception as e:
+
         import traceback
+
         traceback.print_exc()
+
         raise HTTPException(
             status_code=500,
-            detail=f"10-day forecast failed: {type(e).__name__}: {str(e)}"
+            detail=(
+                "10-day forecast failed: "
+                f"{type(e).__name__}: {str(e)}"
+            )
         )
+
+
+# ============================================================
+# 10-DAY GRU FORECAST INTERNAL FUNCTION
+# ============================================================
+
 def predict_next_10_days_internal(city: str):
+
     # --------------------------------------------------------
-    # Get historical + current context
-    # and future Open-Meteo data
+    # Get:
+    #
+    # Historical data
+    # +
+    # Current LIVE context
+    # +
+    # Future LIVE Open-Meteo forecast
     # --------------------------------------------------------
 
     model_history, future_forecast = (
@@ -846,7 +1166,7 @@ def predict_next_10_days_internal(city: str):
     for step in range(240):
 
         # ----------------------------------------------------
-        # Create the same features used during training
+        # Create features
         # ----------------------------------------------------
 
         featured_df = create_features(
@@ -860,16 +1180,17 @@ def predict_next_10_days_internal(city: str):
         )
 
         if len(featured_df) < TIME_STEPS:
+
             raise HTTPException(
                 status_code=500,
                 detail=(
-                    "Not enough feature rows to create "
-                    "the GRU sequence."
+                    "Not enough feature rows "
+                    "to create the GRU sequence."
                 )
             )
 
         # ----------------------------------------------------
-        # Take latest 24 hours
+        # Latest 24-hour sequence
         # ----------------------------------------------------
 
         latest_sequence = (
@@ -880,21 +1201,20 @@ def predict_next_10_days_internal(city: str):
             .to_numpy(dtype=float)
         )
 
-        # ----------------------------------------------------
-        # Check for invalid values
-        # ----------------------------------------------------
+        if not np.isfinite(
+            latest_sequence
+        ).all():
 
-        if not np.isfinite(latest_sequence).all():
             raise HTTPException(
                 status_code=500,
                 detail=(
-                    "Invalid numerical values found "
-                    "in GRU input features."
+                    "Invalid numerical values "
+                    "found in GRU input features."
                 )
             )
 
         # ----------------------------------------------------
-        # Scale using training scaler
+        # Scale
         # ----------------------------------------------------
 
         scaled_sequence = scaler.transform(
@@ -921,7 +1241,7 @@ def predict_next_10_days_internal(city: str):
         )
 
         # ----------------------------------------------------
-        # Corresponding Open-Meteo future row
+        # Corresponding LIVE Open-Meteo future row
         # ----------------------------------------------------
 
         future_row = (
@@ -939,7 +1259,11 @@ def predict_next_10_days_internal(city: str):
         # ----------------------------------------------------
 
         predictions.append({
-            "time": str(forecast_time),
+
+            "time": str(
+                forecast_time
+            ),
+
             "predicted_temperature": round(
                 predicted_temperature,
                 2
@@ -947,11 +1271,8 @@ def predict_next_10_days_internal(city: str):
         })
 
         # ----------------------------------------------------
-        # Add Open-Meteo future weather data
+        # Add actual Open-Meteo future weather variables
         # to the working history.
-        #
-        # This allows lag and rolling features
-        # to update at every hour.
         # ----------------------------------------------------
 
         new_row = future_row.to_dict()
@@ -965,7 +1286,7 @@ def predict_next_10_days_internal(city: str):
         )
 
     # ========================================================
-    # Convert hourly predictions into daily forecasts
+    # Convert hourly predictions to daily forecasts
     # ========================================================
 
     prediction_df = pd.DataFrame(
@@ -983,14 +1304,22 @@ def predict_next_10_days_internal(city: str):
 
     daily_forecast = []
 
-    for day_number, (date, group) in enumerate(
+    for day_number, (
+        date,
+        group
+    ) in enumerate(
         prediction_df.groupby("date"),
         start=1
     ):
 
         daily_forecast.append({
+
             "day": day_number,
-            "date": str(date),
+
+            "date": str(
+                date
+            ),
+
             "min_temperature": round(
                 float(
                     group[
@@ -999,6 +1328,7 @@ def predict_next_10_days_internal(city: str):
                 ),
                 2
             ),
+
             "max_temperature": round(
                 float(
                     group[
@@ -1007,6 +1337,7 @@ def predict_next_10_days_internal(city: str):
                 ),
                 2
             ),
+
             "avg_temperature": round(
                 float(
                     group[
@@ -1022,13 +1353,24 @@ def predict_next_10_days_internal(city: str):
     # ========================================================
 
     return {
+
         "city": city,
+
         "model": "GRU",
-        "forecast_days": len(daily_forecast),
-        "forecast_hours": len(predictions),
+
+        "forecast_days": len(
+            daily_forecast
+        ),
+
+        "forecast_hours": len(
+            predictions
+        ),
+
         "time_steps": TIME_STEPS,
+
         "last_data_time": str(
             model_history.iloc[-1]["time"]
         ),
+
         "daily_forecast": daily_forecast
     }
